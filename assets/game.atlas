@@ -1,0 +1,18 @@
+images {
+  image: "/assets/ball_1.png"
+}
+images {
+  image: "/assets/ball_2.png"
+}
+images {
+  image: "/assets/ball_3.png"
+}
+images {
+  image: "/assets/body.png"
+}
+images {
+  image: "/assets/btn_green_normal.png"
+}
+images {
+  image: "/assets/btn_green_push.png"
+}

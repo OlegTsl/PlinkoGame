@@ -1,0 +1,76 @@
+local game_config     = require("config.game_config")
+local game_controller = require("controller.game_controller")
+local game_manager    = require("manager.game_manager")
+local game_state      = require("model.game_state")
+local level_builder   = require("view.level_builder")
+local viewport        = require("view.viewport")
+
+local DESIGN_WIDTH  = 720
+local DESIGN_HEIGHT = 1280
+
+local function show_error(message)
+	print("ERROR: " .. message)
+	local status = gui.get_node("status_label")
+	gui.set_text(status, message)
+	gui.set_color(status, vmath.vector4(1, 0.35, 0.35, 1))
+end
+
+function init(self)
+	local state  = game_state.create()
+	self.manager = game_manager.create(game_config, state, os.time())
+
+	self.level_builder = level_builder.create()
+	local limits = {
+		min_baskets = game_config.level.min_basket_count,
+		max_baskets = game_config.level.max_basket_count,
+	}
+	local layout, error_message = level_builder.build(self.level_builder, {
+		basket_count = #game_config.baskets.items,
+		basket_items = game_config.baskets.items,
+		limits = limits,
+	})
+	if not layout then
+		show_error(error_message)
+		return
+	end
+
+	self.layout = layout
+	self.controller = game_controller.create(self.manager, layout)
+	self.viewport = viewport.create(
+		gui.get_node("content_root"),
+		gui.get_node("screen_background"),
+		DESIGN_WIDTH,
+		DESIGN_HEIGHT
+	)
+	viewport.update(self.viewport)
+	gui.set_text(gui.get_node("status_label"), string.format(
+		"%d baskets  •  %d pins",
+		layout.basket_count,
+		#layout.pins
+	))
+	msg.post(".", "acquire_input_focus")
+end
+
+function update(self, dt)
+	if self.controller then
+		game_controller.update(self.controller, dt)
+	end
+	if self.manager then
+		self.manager:update()
+	end
+	if self.viewport then
+		viewport.update(self.viewport)
+	end
+end
+
+function final(self)
+	level_builder.destroy(self.level_builder)
+	if self.manager then
+		self.manager:final()
+	end
+	self.layout     = nil
+	self.controller   = nil
+	self.manager       = nil
+	self.viewport      = nil
+	self.level_builder = nil
+end

@@ -1,8 +1,9 @@
 local M = {}
 
-function M.create(manager)
+function M.create(manager, layout)
 	return {
 		manager = manager,
+		layout  = layout,
 	}
 end
 

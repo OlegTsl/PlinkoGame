@@ -18,4 +18,9 @@ return {
 			{ weight = 0.02, score = 100 },
 		},
 	},
+
+	level = {
+		min_basket_count = 5,
+		max_basket_count = 10,
+	},
 }
