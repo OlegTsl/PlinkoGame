@@ -1,0 +1,4 @@
+-- Root lifecycle script. Gameplay modules will be composed here by the controller.
+function init(self)
+	msg.post(".", "acquire_input_focus")
+end

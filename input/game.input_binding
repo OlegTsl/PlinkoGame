@@ -1,0 +1,9 @@
+# Shared pointer action for desktop clicks and mobile touches.
+mouse_trigger {
+  input: MOUSE_BUTTON_LEFT
+  action: "pointer"
+}
+touch_trigger {
+  input: TOUCH_MULTI
+  action: "pointer"
+}
