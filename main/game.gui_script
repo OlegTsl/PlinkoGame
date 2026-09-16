@@ -2,6 +2,8 @@ local game_config     = require("config.game_config")
 local game_controller = require("controller.game_controller")
 local game_manager    = require("manager.game_manager")
 local game_state      = require("model.game_state")
+local ball_view       = require("view.ball_view")
+local hud_view        = require("view.hud_view")
 local level_builder   = require("view.level_builder")
 local viewport        = require("view.viewport")
 
@@ -15,9 +17,27 @@ local function show_error(message)
 	gui.set_color(status, vmath.vector4(1, 0.35, 0.35, 1))
 end
 
+local function apply_events(self, events)
+	if not events then
+		return
+	end
+	ball_view.apply_events(self.ball_view, events)
+	for index = 1, #events do
+		local event = events[index]
+		if event.type == "ball_spawned" or event.type == "spawn_pending" then
+			hud_view.show_bucket(self.hud, event.target_bucket, event.type == "spawn_pending")
+			print("Selected bucket: " .. event.target_bucket)
+		elseif event.type == "motion_error" then
+			hud_view.show_error(self.hud, event.message)
+			print(event.message)
+		end
+	end
+end
+
 function init(self)
 	local state  = game_state.create()
 	self.manager = game_manager.create(game_config, state, os.time())
+	self.paused = false
 
 	self.level_builder = level_builder.create()
 	local limits = {
@@ -28,6 +48,7 @@ function init(self)
 		basket_count = #game_config.baskets.items,
 		basket_items = game_config.baskets.items,
 		limits = limits,
+		pin_art = game_config.art.pin,
 	})
 	if not layout then
 		show_error(error_message)
@@ -35,7 +56,13 @@ function init(self)
 	end
 
 	self.layout = layout
-	self.controller = game_controller.create(self.manager, layout)
+	self.controller, error_message = game_controller.create(game_config, layout)
+	if not self.controller then
+		show_error(error_message)
+		return
+	end
+	self.ball_view = ball_view.create(layout, game_config)
+	self.hud = hud_view.create()
 	self.viewport = viewport.create(
 		gui.get_node("content_root"),
 		gui.get_node("screen_background"),
@@ -43,17 +70,25 @@ function init(self)
 		DESIGN_HEIGHT
 	)
 	viewport.update(self.viewport)
-	gui.set_text(gui.get_node("status_label"), string.format(
-		"%d baskets  •  %d pins",
-		layout.basket_count,
-		#layout.pins
-	))
+	gui.set_text(gui.get_node("status_label"), "Press Spawn")
 	msg.post(".", "acquire_input_focus")
+	window.set_listener(function(_, event)
+		if event == window.WINDOW_EVENT_FOCUS_LOST then
+			self.paused = true
+			hud_view.cancel_press(self.hud)
+		end
+		if event == window.WINDOW_EVENT_FOCUS_GAINED then self.paused = false end
+	end)
 end
 
 function update(self, dt)
-	if self.controller then
-		game_controller.update(self.controller, dt)
+	if self.controller and not self.paused then
+		local step = math.min(math.max(dt, 0), game_config.runtime.max_visual_step)
+		ball_view.update(self.ball_view, step)
+		local deadline = os.clock() + game_config.motion.preparation_budget_ms / 1000
+		apply_events(self, game_controller.update(self.controller, step, function()
+			return os.clock() >= deadline
+		end))
 	end
 	if self.manager then
 		self.manager:update()
@@ -63,7 +98,27 @@ function update(self, dt)
 	end
 end
 
+function on_input(self, action_id, action)
+	if not self.controller or not self.hud then
+		return false
+	end
+	if hud_view.on_input(self.hud, action_id, action) == "spawn" then
+		local events, error_message = game_controller.spawn(self.controller)
+		if not events then
+			hud_view.show_error(self.hud, error_message)
+		else
+			apply_events(self, events)
+		end
+		return true
+	end
+	return false
+end
+
 function final(self)
+	window.set_listener(nil)
+	if self.ball_view then
+		ball_view.destroy(self.ball_view)
+	end
 	level_builder.destroy(self.level_builder)
 	if self.manager then
 		self.manager:final()
@@ -72,5 +127,8 @@ function final(self)
 	self.controller   = nil
 	self.manager       = nil
 	self.viewport      = nil
+	self.ball_view     = nil
+	self.hud           = nil
+	self.paused        = nil
 	self.level_builder = nil
 end

@@ -8,144 +8,240 @@ textures {
   texture: "/assets/game.atlas"
 }
 nodes {
-  position { x: 360.0 y: 640.0 }
-  size { x: 720.0 y: 1280.0 }
-  color { x: 0.055 y: 0.106 z: 0.176 w: 1.0 }
+  position {
+    x: 360.0
+    y: 640.0
+  }
+  size {
+    x: 720.0
+    y: 1280.0
+  }
+  color {
+    x: 0.055
+    y: 0.106
+    z: 0.176
+  }
   type: TYPE_BOX
   id: "screen_background"
   adjust_mode: ADJUST_MODE_STRETCH
-  size_mode: SIZE_MODE_MANUAL
 }
 nodes {
-  position { x: 360.0 y: 640.0 }
-  size { }
-  color { x: 1.0 y: 1.0 z: 1.0 w: 1.0 }
+  position {
+    x: 360.0
+    y: 640.0
+  }
   type: TYPE_BOX
   id: "content_root"
-  adjust_mode: ADJUST_MODE_FIT
-  size_mode: SIZE_MODE_MANUAL
 }
 nodes {
-  position { y: 24.0 }
-  size { x: 560.0 y: 780.0 }
-  color { x: 1.0 y: 1.0 z: 1.0 w: 1.0 }
+  position {
+    y: 24.0
+  }
+  size {
+    x: 560.0
+    y: 780.0
+  }
   type: TYPE_BOX
   texture: "game/body"
   id: "level_root"
   parent: "content_root"
   inherit_alpha: true
-  adjust_mode: ADJUST_MODE_FIT
-  size_mode: SIZE_MODE_MANUAL
 }
 nodes {
-  position { y: 532.0 }
-  size { x: 400.0 y: 70.0 }
-  color { x: 0.75 y: 0.34 z: 0.98 w: 1.0 }
-  type: TYPE_TEXT
-  text: "Plinko"
-  font: "default"
-  id: "title_label"
-  parent: "content_root"
-  inherit_alpha: true
-  adjust_mode: ADJUST_MODE_FIT
-  size_mode: SIZE_MODE_MANUAL
-}
-nodes {
-  position { y: -430.0 }
-  size { x: 520.0 y: 40.0 }
-  color { x: 0.72 y: 0.82 z: 0.9 w: 1.0 }
-  type: TYPE_TEXT
-  text: "LevelBuilder"
-  font: "default"
-  id: "status_label"
-  parent: "content_root"
-  inherit_alpha: true
-  adjust_mode: ADJUST_MODE_FIT
-  size_mode: SIZE_MODE_MANUAL
-}
-nodes {
-  position { y: 350.0 }
-  size { x: 40.0 y: 40.0 }
-  color { x: 1.0 y: 1.0 z: 1.0 w: 0.65 }
+  position {
+    y: 365.0
+  }
+  size {
+    x: 40.0
+    y: 40.0
+  }
   type: TYPE_BOX
   texture: "game/ball_1"
   id: "spawn_anchor"
   parent: "level_root"
   inherit_alpha: true
-  adjust_mode: ADJUST_MODE_FIT
-  size_mode: SIZE_MODE_MANUAL
+  alpha: 0.65
 }
 nodes {
-  position { y: 35.0 }
-  size { x: 520.0 y: 570.0 }
-  color { x: 0.2 y: 1.0 z: 0.35 w: 0.12 }
+  position {
+    y: 35.0
+  }
+  size {
+    x: 520.0
+    y: 570.0
+  }
+  color {
+    x: 0.2
+    z: 0.35
+  }
   type: TYPE_BOX
   id: "pin_area_anchor"
   parent: "level_root"
   inherit_alpha: true
-  adjust_mode: ADJUST_MODE_FIT
-  size_mode: SIZE_MODE_MANUAL
+  alpha: 0.12
 }
 nodes {
-  position { y: -334.0 }
-  size { x: 520.0 y: 84.0 }
-  color { x: 1.0 y: 0.35 z: 0.25 w: 0.16 }
+  position {
+    y: -334.0
+  }
+  size {
+    x: 520.0
+    y: 84.0
+  }
+  color {
+    y: 0.35
+    z: 0.25
+  }
   type: TYPE_BOX
   id: "basket_area_anchor"
   parent: "level_root"
   inherit_alpha: true
-  adjust_mode: ADJUST_MODE_FIT
-  size_mode: SIZE_MODE_MANUAL
+  alpha: 0.16
 }
 nodes {
-  position { x: -340.0 y: 350.0 }
-  size { x: 24.0 y: 24.0 }
-  color { x: 1.0 y: 1.0 z: 1.0 w: 1.0 }
+  position {
+    x: -340.0
+    y: 350.0
+  }
+  size {
+    x: 24.0
+    y: 24.0
+  }
   type: TYPE_BOX
   texture: "game/ball_2"
   id: "pin_template"
   parent: "level_root"
   inherit_alpha: true
-  adjust_mode: ADJUST_MODE_FIT
-  size_mode: SIZE_MODE_MANUAL
   enabled: false
 }
 nodes {
-  position { x: 340.0 y: -334.0 }
-  size { x: 52.0 y: 84.0 }
-  color { x: 1.0 y: 1.0 z: 1.0 w: 0.94 }
+  position {
+    x: 340.0
+    y: 350.0
+  }
+  size {
+    x: 44.0
+    y: 44.0
+  }
+  type: TYPE_BOX
+  texture: "game/ball_3"
+  id: "wave_template"
+  parent: "level_root"
+  inherit_alpha: true
+  alpha: 0.35
+  enabled: false
+}
+nodes {
+  position {
+    x: 340.0
+    y: -334.0
+  }
+  size {
+    x: 52.0
+    y: 84.0
+  }
   type: TYPE_BOX
   id: "basket_template"
   parent: "level_root"
   inherit_alpha: true
-  adjust_mode: ADJUST_MODE_FIT
-  size_mode: SIZE_MODE_MANUAL
+  alpha: 0.94
   enabled: false
 }
 nodes {
-  size { x: 48.0 y: 80.0 }
-  color { x: 0.16 y: 0.72 z: 0.62 w: 1.0 }
+  size {
+    x: 48.0
+    y: 80.0
+  }
+  color {
+    x: 0.16
+    y: 0.72
+    z: 0.62
+  }
   type: TYPE_BOX
   id: "basket_fill_template"
   parent: "basket_template"
   inherit_alpha: true
-  adjust_mode: ADJUST_MODE_FIT
-  size_mode: SIZE_MODE_MANUAL
 }
 nodes {
-  position { y: -1.0 }
-  size { x: 48.0 y: 32.0 }
-  color { x: 1.0 y: 1.0 z: 1.0 w: 1.0 }
+  position {
+    y: -1.0
+  }
+  size {
+    x: 48.0
+    y: 32.0
+  }
   type: TYPE_TEXT
   text: "100"
   font: "default"
   id: "basket_label_template"
   parent: "basket_template"
   inherit_alpha: true
-  adjust_mode: ADJUST_MODE_FIT
-  size_mode: SIZE_MODE_MANUAL
+}
+nodes {
+  position {
+    y: 532.0
+  }
+  size {
+    x: 400.0
+    y: 70.0
+  }
+  color {
+    x: 0.75
+    y: 0.34
+    z: 0.98
+  }
+  type: TYPE_TEXT
+  text: "Plinko"
+  font: "default"
+  id: "title_label"
+  parent: "content_root"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    y: -550.0
+  }
+  size {
+    x: 520.0
+    y: 40.0
+  }
+  color {
+    x: 0.72
+    y: 0.82
+    z: 0.9
+  }
+  type: TYPE_TEXT
+  text: "Press Spawn"
+  font: "default"
+  id: "status_label"
+  parent: "content_root"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    y: -470.0
+  }
+  size {
+    x: 240.0
+    y: 72.0
+  }
+  type: TYPE_BOX
+  texture: "game/btn_green_normal"
+  id: "spawn_button"
+  parent: "content_root"
+  inherit_alpha: true
+}
+nodes {
+  size {
+    x: 220.0
+    y: 48.0
+  }
+  type: TYPE_TEXT
+  text: "Spawn"
+  font: "default"
+  id: "spawn_button_label"
+  parent: "spawn_button"
+  inherit_alpha: true
 }
 material: "/builtins/materials/gui.material"
 adjust_reference: ADJUST_REFERENCE_DISABLED
-max_nodes: 256
-background_color { x: 0.055 y: 0.106 z: 0.176 w: 1.0 }

@@ -75,7 +75,8 @@ local function build_parameters(context, specification)
 		spawn        = point_in_field(context.nodes.spawn_anchor, field_size),
 		pin_area     = node_rect_in_field(context.nodes.pin_area_anchor, field_size),
 		basket_area  = node_rect_in_field(context.nodes.basket_area_anchor, field_size),
-		pin_radius   = math.min(pin_size.x, pin_size.y) * 0.5,
+		pin_radius   = math.min(pin_size.x, pin_size.y)
+			* specification.pin_art.radius / specification.pin_art.image_size,
 	}
 end
 
@@ -85,6 +86,12 @@ local function create_pin_nodes(context, layout)
 		local node = gui.clone(context.nodes.pin_template)
 		gui.set_parent(node, context.nodes.level_root)
 		gui.set_position(node, to_gui_position(layout, pin.x, pin.y))
+		local art = context.pin_art
+		local size = gui.get_size(node)
+		local position = gui.get_position(node)
+		position.x = position.x + (0.5 - art.center_x / art.image_size) * size.x
+		position.y = position.y + (art.center_y / art.image_size - 0.5) * size.y
+		gui.set_position(node, position)
 		gui.set_enabled(node, true)
 		context.dynamic_roots[#context.dynamic_roots + 1] = node
 	end
@@ -144,6 +151,10 @@ function M.build(context, specification)
 	if not layout then
 		return nil, error_message
 	end
+	context.pin_art = specification.pin_art
+	local frame = gui.get_size(context.nodes.basket_template)
+	local fill = gui.get_size(context.nodes.basket_fill_template)
+	layout.divider_half_width = (frame.x - fill.x) * 0.5
 
 	create_pin_nodes(context, layout)
 	create_basket_nodes(context, layout)
