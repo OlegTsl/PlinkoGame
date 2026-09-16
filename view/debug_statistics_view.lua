@@ -1,5 +1,7 @@
 local M = {}
 
+local DRAW_DEBUG_TEXT = hash("draw_debug_text")
+
 local TEXT_SCALE = 2.5
 local LEFT = 10
 local TOP = 20
@@ -11,7 +13,7 @@ function M.create()
 	local background = gui.new_box_node(vmath.vector3(), vmath.vector3(1, 1, 0))
 	gui.set_color(background, BACKGROUND_COLOR)
 	gui.set_enabled(background, false)
-	return { background = background }
+	return { background = background, render_url = msg.url("@render:"), lines = {} }
 end
 
 function M.set_visible(context, visible)
@@ -23,37 +25,31 @@ function M.destroy(context)
 	context.background = nil
 end
 
-local function draw_line(text, line, screen_height)
-	msg.post("@render:", "draw_debug_text", {
-		text = text,
-		position = vmath.vector3(LEFT, screen_height - TOP - line * LINE_HEIGHT, 0),
-		color = TEXT_COLOR,
-	})
-end
-
--- Sends a read-only statistics snapshot to Defold's debug text renderer.
+-- Reuse message payloads and format text only when displayed values change.
 function M.draw(context, statistics)
-	local screen_width, screen_height = window.get_size()
-	gui.set_size(context.background, vmath.vector3(
-		screen_width,
-		screen_height,
-		0
-	))
-	gui.set_position(context.background, vmath.vector3(
-		screen_width * 0.5,
-		screen_height * 0.5,
-		0
-	))
-
-	local logical_screen_height = screen_height / TEXT_SCALE
-	draw_line("Total score: " .. tostring(statistics.score), 0, logical_screen_height)
-	for index = 1, #statistics.hits do
-		draw_line(string.format(
-			"Basket %d: %d hits (%.2f%%)",
-			index,
-			statistics.hits[index],
-			statistics.percentages[index]
-		), index, logical_screen_height)
+	local width, height = window.get_size()
+	local resized = width ~= context.width or height ~= context.height
+	if resized then
+		context.width, context.height = width, height
+		gui.set_size(context.background, vmath.vector3(width, height, 0))
+		gui.set_position(context.background, vmath.vector3(width * 0.5, height * 0.5, 0))
+	end
+	for line = 0, #statistics.hits do
+		local item = context.lines[line]
+		if not item then
+			item = { message = { position = vmath.vector3(), color = TEXT_COLOR } }
+			context.lines[line] = item
+		end
+		local value = line == 0 and statistics.score or statistics.hits[line]
+		if item.value ~= value or (line > 0 and item.total ~= statistics.total_hits) then
+			item.value, item.total = value, statistics.total_hits
+			if line == 0 then item.message.text = "Total score: " .. tostring(value)
+			else item.message.text = string.format("Basket %d: %d hits (%.2f%%)",
+				line, value, statistics.percentages[line]) end
+		end
+		local position = item.message.position
+		position.x, position.y = LEFT, height / TEXT_SCALE - TOP - line * LINE_HEIGHT
+		msg.post(context.render_url, DRAW_DEBUG_TEXT, item.message)
 	end
 end
 

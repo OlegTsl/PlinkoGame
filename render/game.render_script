@@ -27,6 +27,7 @@ local DEFAULT_NEAR = -1
 local DEFAULT_FAR =   1
 local DEFAULT_ZOOM =  1
 local DEBUG_TEXT_SCALE = 2.5
+local COMPONENT_CAMERA_OPTIONS = { use_frustum = true }
 
 --
 -- projection that centers content with maintained aspect ratio and optional zoom
@@ -59,6 +60,11 @@ end
 --
 local function get_gui_projection(camera, state)
     return vmath.matrix4_orthographic(0, state.window_width, 0, state.window_height, camera.near, camera.far)
+end
+
+local function get_debug_projection(camera, state)
+    return vmath.matrix4_orthographic(0, state.window_width / DEBUG_TEXT_SCALE,
+        0, state.window_height / DEBUG_TEXT_SCALE, camera.near, camera.far)
 end
 
 local function update_clear_color(state, color)
@@ -147,7 +153,7 @@ local function set_camera_world(state)
             if camera.get_enabled(camera_components[i]) then
                 local camera_component = state.cameras.camera_component
                 camera_component.camera = camera_components[i]
-                render.set_camera(camera_component.camera, { use_frustum = true })
+                render.set_camera(camera_component.camera, COMPONENT_CAMERA_OPTIONS)
                 -- The frustum will be overridden by the render.set_camera call,
                 -- so we don't need to return anything here other than an empty table.
                 return camera_component.options
@@ -188,7 +194,9 @@ function init(self)
     init_camera(camera_gui, get_gui_projection)
     -- Create a special camera that wraps camera components (if they exist)
     -- It will take precedence over any other camera, and not change from messages
-    local camera_component = create_camera(state, "camera_component")
+    create_camera(state, "camera_component")
+    local camera_debug = create_camera(state, "camera_debug")
+    init_camera(camera_debug, get_debug_projection)
     update_state(state)
 end
 
@@ -245,13 +253,9 @@ function update(self)
     render.draw(predicates.gui, camera_gui.options)
 
     -- draw_text has no scale field, so only debug text uses a scaled projection.
-    local debug_projection = vmath.matrix4_orthographic(
-        0, state.window_width / DEBUG_TEXT_SCALE,
-        0, state.window_height / DEBUG_TEXT_SCALE,
-        camera_gui.near, camera_gui.far
-    )
-    render.set_projection(debug_projection)
-    render.draw(predicates.debug_text, camera_gui.options)
+    local camera_debug = state.cameras.camera_debug
+    render.set_projection(camera_debug.proj)
+    render.draw(predicates.debug_text, camera_debug.options)
     render.disable_state(graphics.STATE_STENCIL_TEST)
     render.disable_state(graphics.STATE_BLEND)
 end

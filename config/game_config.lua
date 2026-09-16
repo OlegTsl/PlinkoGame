@@ -1,4 +1,4 @@
-return {
+local M = {
 	balls = {
 		count         = 5,
 		respawn_delay = 60,
@@ -48,3 +48,5 @@ return {
 		visual_seed    = 130363,
 	},
 }
+
+return M

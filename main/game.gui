@@ -412,4 +412,5 @@ nodes {
   inherit_alpha: true
 }
 material: "/builtins/materials/gui.material"
+max_nodes: 512
 adjust_reference: ADJUST_REFERENCE_DISABLED

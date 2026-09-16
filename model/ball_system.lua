@@ -18,6 +18,16 @@ function M.create(config, physics_data, layout)
 	if math.abs(weight_sum - 1) > config.random.weight_epsilon then
 		return nil, "Basket weights must sum to 1"
 	end
+	local radius = physics_data.ball_radius_ratio * layout.basket_width
+	if layout.basket_width <= 2 * (radius + layout.divider_half_width) then
+		return nil, "Ball diameter and basket dividers leave no landing corridor"
+	end
+	local spread = physics_data.spawn_spread_ratio * layout.basket_width
+	if layout.spawn.x - spread - radius < layout.baskets[1].left
+		or layout.spawn.x + spread + radius > layout.baskets[#layout.baskets].right
+		or layout.spawn.y + radius > layout.height then
+		return nil, "Ball launch must fit inside the field walls"
+	end
 	local context = {
 		config = config,
 		physics = physics_data,
@@ -25,6 +35,7 @@ function M.create(config, physics_data, layout)
 		world = collision_world.create(layout, physics_data),
 		bank = route_bank.create(config, layout),
 		active = {},
+		events = {},
 		next_ball_id = 1,
 		outcome_seed = config.random.outcome_seed,
 		visual_seed = config.random.visual_seed,
@@ -43,6 +54,8 @@ local function activate(context, route, next_visual_seed)
 		next_contact_index = 1,
 		phase = "falling",
 	}
+	ball.pose = { type = "ball_pose", ball_id = ball.id, position = {}, scale = 1, alpha = 1 }
+	ball.exit_state = {}
 	context.next_ball_id = context.next_ball_id + 1
 	context.visual_seed = next_visual_seed
 	context.active[#context.active + 1] = ball
@@ -75,7 +88,7 @@ function M.spawn(context)
 	return { { type = "spawn_pending", target_bucket = target } }
 end
 
-local function update_falling(context, ball, step, events)
+local function update_falling(ball, step, events)
 	local previous = ball.elapsed
 	ball.elapsed = math.min(previous + step, ball.route.duration)
 
@@ -96,23 +109,18 @@ local function update_falling(context, ball, step, events)
 		ball.next_contact_index = ball.next_contact_index + 1
 	end
 
-	local position
-	position, ball.segment_index = trajectory.sample(
+	ball.pose.position, ball.segment_index = trajectory.sample(
 		ball.route,
 		ball.elapsed,
-		ball.segment_index
+		ball.segment_index,
+		ball.pose.position
 	)
-	push(events, {
-		type = "ball_pose",
-		ball_id = ball.id,
-		position = position,
-		scale = 1,
-		alpha = 1,
-	})
+	push(events, ball.pose)
 
 	if ball.elapsed >= ball.route.duration then
 		local segment = ball.route.segments[#ball.route.segments]
 		ball.phase = "exiting"
+		ball.exit_elapsed = 0
 		ball.exit_x = ball.route.final_position.x
 		ball.exit_y = ball.route.final_position.y
 		ball.exit_vx = segment.vx
@@ -130,12 +138,9 @@ local function update_exiting(context, ball, step, events)
 	local contacts = 0
 	while remaining > context.physics.time_epsilon
 		and contacts < context.physics.max_contacts do
-		local state = {
-			x = ball.exit_x,
-			y = ball.exit_y,
-			vx = ball.exit_vx,
-			vy = ball.exit_vy,
-		}
+		local state = ball.exit_state
+		state.x, state.y = ball.exit_x, ball.exit_y
+		state.vx, state.vy = ball.exit_vx, ball.exit_vy
 		local hit = collision_world.first_hit(context.world, state, remaining, true)
 		local elapsed = hit and hit.time or remaining
 		ball.exit_x = ball.exit_x + ball.exit_vx * elapsed
@@ -158,43 +163,41 @@ local function update_exiting(context, ball, step, events)
 		contacts = contacts + 1
 	end
 
-	local position = {
-		x = ball.exit_x,
-		y = ball.exit_y,
-	}
-	push(events, {
-		type = "ball_pose",
-		ball_id = ball.id,
-		position = position,
-		scale = 1,
-		alpha = 1,
-	})
+	local position = ball.pose.position
+	position.x, position.y = ball.exit_x, ball.exit_y
+	push(events, ball.pose)
+	ball.exit_elapsed = ball.exit_elapsed + step
+	-- Numerical chatter must never retain an already-scored ball indefinitely.
 	return position.y + context.world.radius < 0
+		or ball.exit_elapsed >= context.physics.max_flight_time
 end
 
+-- Events and pose records are borrowed until the next update; consume synchronously.
 function M.update(context, dt, deadline_reached)
-	local events = {}
+	local events = context.events
+	for index = #events, 1, -1 do events[index] = nil end
 	if not context.error then
 		route_bank.update(context.bank, context.world, context.config, context.physics, deadline_reached)
 	end
 	if context.pending and not context.error then
 		local target = context.pending.target
+		local completed_attempts = context.bank.attempts - (context.bank.candidate and 1 or 0)
 		local route, seed = route_bank.take(context.bank, target, context.visual_seed)
 		if route then
 			local spawned = activate(context, route, seed)
 			push(events, spawned[1])
-		elseif context.bank.attempts - context.pending.started_attempt >= context.config.motion.max_search_candidates then
+		elseif completed_attempts - context.pending.started_attempt >= context.config.motion.max_search_candidates then
 			context.error = "No physical route to bucket " .. target .. "; adjust launch/field settings"
 			push(events, { type = "motion_error", message = context.error })
 		end
 	end
 	local step = math.min(math.max(dt, 0), context.config.runtime.max_visual_step)
-	local remaining = {}
-	for index = 1, #context.active do
+	local active_count, kept = #context.active, 0
+	for index = 1, active_count do
 		local ball = context.active[index]
 		local removed = false
 		if ball.phase == "falling" then
-			update_falling(context, ball, step, events)
+			update_falling(ball, step, events)
 		else
 			removed = update_exiting(context, ball, step, events)
 		end
@@ -202,10 +205,11 @@ function M.update(context, dt, deadline_reached)
 		if removed then
 			push(events, { type = "ball_removed", ball_id = ball.id })
 		else
-			remaining[#remaining + 1] = ball
+			kept = kept + 1
+			context.active[kept] = ball
 		end
 	end
-	context.active = remaining
+	for index = kept + 1, active_count do context.active[index] = nil end
 	return events
 end
 

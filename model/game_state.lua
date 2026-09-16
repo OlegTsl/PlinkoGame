@@ -1,14 +1,20 @@
 local M = {}
 
 local function non_negative_integer(value, fallback)
-	if type(value) ~= "number" or value < 0 or value ~= value then
+	if type(value) ~= "number" or value < 0 or value ~= value or value == math.huge then
 		return fallback
 	end
 	return math.floor(value)
 end
 
+local function require_integer(value)
+	assert(type(value) == "number" and non_negative_integer(value) == value,
+		"state value must be a finite non-negative integer")
+end
+
 function M.create(basket_count)
-	assert(type(basket_count) == "number" and basket_count >= 1, "basket_count must be positive")
+	require_integer(basket_count)
+	assert(basket_count >= 1, "basket_count must be positive")
 	local balls = 0
 	local score = 0
 	local regen_timestamp = 0
@@ -24,6 +30,7 @@ function M.create(basket_count)
 	end
 
 	function state:set_balls(value)
+		require_integer(value)
 		if balls == value then
 			return
 		end
@@ -36,6 +43,7 @@ function M.create(basket_count)
 	end
 
 	function state:set_score(value)
+		require_integer(value)
 		if score == value then
 			return
 		end
@@ -48,6 +56,8 @@ function M.create(basket_count)
 	end
 
 	function state:set_regen_timestamp(value)
+		assert(type(value) == "number" and value >= 0 and value < math.huge,
+			"timestamp must be finite and non-negative")
 		if regen_timestamp == value then
 			return
 		end
@@ -102,14 +112,22 @@ function M.create(basket_count)
 
 	function state:deserialize(snapshot)
 		assert(type(snapshot) == "table", "snapshot must be a table")
-		balls = non_negative_integer(snapshot.balls, 0)
-		score = non_negative_integer(snapshot.score, 0)
-		regen_timestamp = non_negative_integer(snapshot.regen_timestamp, 0)
+		-- Keep the caller's defaults for damaged or missing fields. A fractional
+		-- timestamp is valid when the regeneration interval is fractional.
+		balls = non_negative_integer(snapshot.balls, balls)
+		score = non_negative_integer(snapshot.score, score)
+		local timestamp = snapshot.regen_timestamp
+		if type(timestamp) == "number" and timestamp >= 0 and timestamp < math.huge then
+			regen_timestamp = timestamp
+		end
+		local repaired = balls ~= snapshot.balls or score ~= snapshot.score
+			or regen_timestamp ~= snapshot.regen_timestamp
 		local saved_hits = type(snapshot.basket_hits) == "table" and snapshot.basket_hits or {}
 		for index = 1, basket_count do
 			basket_hits[index] = non_negative_integer(saved_hits[index], 0)
+			repaired = repaired or basket_hits[index] ~= saved_hits[index]
 		end
-		dirty = false
+		dirty = repaired
 	end
 
 	return state

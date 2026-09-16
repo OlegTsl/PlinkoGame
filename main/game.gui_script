@@ -6,15 +6,17 @@ local game_controller = require("controller.game_controller")
 local game_manager    = require("manager.game_manager")
 local game_state      = require("model.game_state")
 local ball_view       = require("view.ball_view")
+local audio_view      = require("view.audio_view")
 local debug_statistics_view = require("view.debug_statistics_view")
 local hud_view        = require("view.hud_view")
 local level_builder   = require("view.level_builder")
 local viewport        = require("view.viewport")
 local cheats_view     = require("view.cheats_view")
+local storage         = require("services.storage")
+local config_validator = require("config.config_validator")
 
 local DESIGN_WIDTH  = 560
 local DESIGN_HEIGHT = 780
-local MULTI_SPAWN_COUNT = 5
 local TOGGLE_DEBUG_STATISTICS = hash("toggle_debug_statistics")
 
 local function show_error(message)
@@ -34,10 +36,12 @@ local function apply_events(self, events)
 		if event.type == "ball_spawned" or event.type == "spawn_pending" then
 			hud_view.show_bucket(self.hud, event.target_bucket, event.type == "spawn_pending")
 			print("Selected bucket: " .. event.target_bucket)
+		elseif event.type == "pin_hit" then
+			audio_view.play_collision(self.audio)
 		elseif event.type == "ball_landed" then
 			level_builder.play_score_pop(self.level_builder, event.target_bucket)
-			local score = self.manager:record_basket_hit(event.target_bucket)
-			hud_view.set_score(self.hud, score)
+			audio_view.play_collect(self.audio)
+			hud_view.set_score(self.hud, event.score)
 		elseif event.type == "motion_error" then
 			hud_view.show_error(self.hud, event.message)
 			print(event.message)
@@ -46,12 +50,20 @@ local function apply_events(self, events)
 end
 
 function init(self)
+	local valid, validation_error = config_validator.validate(game_config, physics_data, ui_data)
+	if not valid then
+		show_error(validation_error)
+		return
+	end
 	local wall_now = os.time()
 	local state  = game_state.create(#game_config.baskets.items)
-	self.manager = game_manager.create(game_config, state, wall_now)
+	self.manager = game_manager.create(game_config, state, wall_now, storage.create())
+	self.deadline_reached = function() return os.clock() >= self.preparation_deadline end
 	self.paused = false
 	self.show_debug_statistics = false
 	self.debug_statistics = debug_statistics_view.create()
+	self.audio = audio_view.create()
+	self.statistics_output = { hits = {}, percentages = {} }
 	self.cheats = cheats_view.create(build_config.DEV_CHEATS)
 
 	self.level_builder = level_builder.create()
@@ -64,14 +76,14 @@ function init(self)
 		basket_items = game_config.baskets.items,
 		limits = limits,
 		pin_art = game_config.art.pin,
-	})
+	}, game_config.runtime.max_active_balls, ui_data.wave.pool_size)
 	if not layout then
 		show_error(error_message)
 		return
 	end
 
 	self.layout = layout
-	self.controller, error_message = game_controller.create(game_config, physics_data, layout)
+	self.controller, error_message = game_controller.create(game_config, physics_data, layout, self.manager)
 	if not self.controller then
 		show_error(error_message)
 		return
@@ -99,15 +111,18 @@ function init(self)
 		if event == window.WINDOW_EVENT_FOCUS_LOST then
 			self.paused = true
 			hud_view.cancel_press(self.hud)
+			cheats_view.cancel_input(self.cheats)
+			local saved, message = self.manager:save()
+			if not saved then print("Save failed on focus loss: " .. message) end
 		end
 		if event == window.WINDOW_EVENT_FOCUS_GAINED then self.paused = false end
 	end)
 end
 
 function update(self, dt)
-	if self.cheats and self.cheats.enabled then
-		local width, height = window.get_size()
-		imgui.set_display_size(width, height)
+	if self.restarting then return end
+	if self.audio then audio_view.update(self.audio, dt) end
+	if self.hud and self.cheats and self.cheats.enabled then
 		local actions = cheats_view.draw(self.cheats)
 		for index = 1, #actions do
 			local action = actions[index]
@@ -118,6 +133,10 @@ function update(self, dt)
 				local reset, error_message = self.manager:reset_progress(os.time())
 				if not reset then
 					hud_view.show_error(self.hud, error_message)
+				else
+					self.restarting = true
+					sys.reboot()
+					return
 				end
 			end
 		end
@@ -125,13 +144,18 @@ function update(self, dt)
 	if self.controller and not self.paused then
 		local step = math.min(math.max(dt, 0), game_config.runtime.max_visual_step)
 		ball_view.update(self.ball_view, step)
-		local deadline = os.clock() + game_config.motion.preparation_budget_ms / 1000
-		apply_events(self, game_controller.update(self.controller, step, function()
-			return os.clock() >= deadline
-		end))
+		self.preparation_deadline = os.clock() + game_config.motion.preparation_budget_ms / 1000
+		apply_events(self, self.controller:update(step, self.deadline_reached))
 	end
 	if self.manager then
-		local inventory = self.manager:update(os.time())
+		local inventory, save_error = self.manager:update(os.time())
+		if save_error ~= self.save_error then
+			self.save_error = save_error
+			if save_error then
+				print("Save failed: " .. save_error)
+				if self.hud then hud_view.show_error(self.hud, "Save failed: " .. save_error) end
+			end
+		end
 		if self.hud then
 			hud_view.set_inventory(
 				self.hud,
@@ -141,7 +165,7 @@ function update(self, dt)
 			)
 		end
 		if self.show_debug_statistics then
-			debug_statistics_view.draw(self.debug_statistics, self.manager:get_statistics())
+			debug_statistics_view.draw(self.debug_statistics, self.manager:get_statistics(self.statistics_output))
 		end
 	end
 	if self.hud then
@@ -153,7 +177,7 @@ function update(self, dt)
 end
 
 function on_input(self, action_id, action)
-	if not self.controller or not self.hud then
+	if self.restarting or not self.controller or not self.hud or self.paused then
 		return false
 	end
 	if build_config.DEV_CHEATS
@@ -166,50 +190,20 @@ function on_input(self, action_id, action)
 		)
 		return true
 	end
-	if self.cheats and self.cheats.enabled then
-		local pointer = action.touch and action.touch[1] or action
-		local _, height = window.get_size()
-		local x = pointer.screen_x or pointer.x
-		local y = pointer.screen_y or pointer.y
-		if x and y then
-			imgui.set_mouse_pos(x, height - y)
-		end
-		if action_id == hash("pointer") then
-			if pointer.pressed then
-				imgui.set_mouse_button(imgui.MOUSEBUTTON_LEFT, 1)
-			elseif pointer.released then
-				imgui.set_mouse_button(imgui.MOUSEBUTTON_LEFT, 0)
-			end
-		end
-		if imgui.want_mouse_input() then
-			return true
-		end
+	if cheats_view.on_input(self.cheats, action_id, action) then
+		hud_view.cancel_press(self.hud)
+		return true
 	end
 	local action_name = hud_view.on_input(self.hud, action_id, action)
 	if action_name == "spawn" or action_name == "spawn_many" then
 		local wall_now = os.time()
-		local inventory = self.manager:refresh_balls(wall_now)
-		local cost = action_name == "spawn_many" and MULTI_SPAWN_COUNT or 1
-		if inventory.balls < cost then
-			hud_view.show_error(self.hud, "Not enough balls")
-			return true
-		end
-		local events, error_message
-		if action_name == "spawn_many" then
-			events, error_message = game_controller.spawn_many(self.controller, MULTI_SPAWN_COUNT)
-		else
-			events, error_message = game_controller.spawn(self.controller)
-		end
+		local events, error_message = self.controller:request(action_name, wall_now)
 		if not events then
 			hud_view.show_error(self.hud, error_message)
 		else
-			inventory = self.manager:consume_balls(cost, wall_now)
-			hud_view.set_inventory(
-				self.hud,
-				inventory.balls,
-				self.manager:get_ball_limit(),
-				inventory.seconds_to_next
-			)
+			local inventory = self.manager:refresh_balls(wall_now)
+			hud_view.set_inventory(self.hud, inventory.balls,
+				self.manager:get_ball_limit(), inventory.seconds_to_next)
 			apply_events(self, events)
 		end
 		return true
@@ -224,7 +218,8 @@ function final(self)
 	end
 	level_builder.destroy(self.level_builder)
 	if self.manager then
-		self.manager:final()
+		local saved, message = self.manager:final()
+		if not saved then print("Save failed on shutdown: " .. message) end
 	end
 	if self.debug_statistics then
 		debug_statistics_view.destroy(self.debug_statistics)
@@ -234,10 +229,13 @@ function final(self)
 	self.manager       = nil
 	self.viewport      = nil
 	self.ball_view     = nil
+	self.audio         = nil
 	self.hud           = nil
 	self.paused        = nil
 	self.level_builder = nil
 	self.cheats        = nil
 	self.show_debug_statistics = nil
 	self.debug_statistics = nil
+	self.statistics_output = nil
+	self.deadline_reached = nil
 end

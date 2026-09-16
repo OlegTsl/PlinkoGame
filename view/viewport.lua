@@ -14,20 +14,21 @@ end
 
 function M.update(context)
 	local width, height = window.get_size()
+	if width <= 0 or height <= 0 then return false end
 	if width == context.window_width and height == context.window_height then
 		return false
 	end
 
 	context.window_width  = width
 	context.window_height = height
-	
+
 	local scale = math.min(width / context.design_width, height / context.design_height)
-	
+
 	gui.set_position(context.content_root, vmath.vector3(width * 0.5, height * 0.5, 0))
 	gui.set_scale   (context.content_root, vmath.vector3(scale, scale, 1))
 	gui.set_position(context.background,   vmath.vector3(width * 0.5, height * 0.5, 0))
 	gui.set_size    (context.background,   vmath.vector3(width, height, 0))
-	
+
 	return true
 end
 

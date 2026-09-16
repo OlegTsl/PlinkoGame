@@ -1,4 +1,4 @@
-return {
+local M = {
 	gravity_ratio = 16,               -- logical basket widths / s²
 	ball_radius_ratio = 0.20,
 	pin_restitution = 0.78,
@@ -18,3 +18,5 @@ return {
 	max_contacts = 96,
 	minimum_pin_hits = 2,
 }
+
+return M

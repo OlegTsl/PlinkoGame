@@ -2,13 +2,8 @@ local M = {}
 
 local POINTER = hash("pointer")
 local SCORE_ROLL_DURATION = 0.4
-
-local function pointer(action)
-	if action.touch and #action.touch > 0 then
-		return action.touch[1]
-	end
-	return action
-end
+local BUTTON_NORMAL = hash("btn_green_normal")
+local BUTTON_PUSH = hash("btn_green_push")
 
 local function format_time(seconds)
 	local value = math.max(0, math.ceil(seconds or 0))
@@ -27,6 +22,9 @@ function M.create(initial_score, balls, maximum, seconds_to_next)
 		log = gui.get_node("status_label"),
 		score_label = gui.get_node("score_label"),
 		pressed_button = nil,
+		pressed_pointer = nil,
+		shown_balls = balls,
+		shown_seconds = balls < maximum and seconds_to_next or false,
 		displayed_score = initial_score,
 		score_from = initial_score,
 		score_target = initial_score,
@@ -52,11 +50,14 @@ function M.set_score(context, score)
 end
 
 function M.set_inventory(context, balls, maximum, seconds_to_next)
-	gui.set_text(context.balls_label, tostring(balls))
-	if balls < maximum then
-		gui.set_text(context.timer_label, "+1 in " .. format_time(seconds_to_next))
-	else
-		gui.set_text(context.timer_label, "Ready")
+	if context.shown_balls ~= balls then
+		context.shown_balls = balls
+		gui.set_text(context.balls_label, tostring(balls))
+	end
+	local seconds = balls < maximum and seconds_to_next or false
+	if context.shown_seconds ~= seconds then
+		context.shown_seconds = seconds
+		gui.set_text(context.timer_label, seconds and "+1 in " .. format_time(seconds) or "Ready")
 	end
 end
 
@@ -68,37 +69,46 @@ function M.update(context, dt)
 	local progress = context.score_elapsed / SCORE_ROLL_DURATION
 	progress = progress * progress * (3 - 2 * progress)
 	local value = context.score_from + (context.score_target - context.score_from) * progress
-	context.displayed_score = math.floor(value + 0.5)
-	set_score_text(context, context.displayed_score)
+	local rounded = math.floor(value + 0.5)
+	if rounded ~= context.displayed_score then
+		context.displayed_score = rounded
+		set_score_text(context, rounded)
+	end
 end
 
-function M.on_input(context, action_id, action)
-	if action_id ~= POINTER then
-		return nil
-	end
-
-	local value = pointer(action)
-	if value.pressed then
+local function handle_pointer(context, value, id)
+	if not value.x or not value.y then return nil end
+	if value.pressed and not context.pressed_button then
 		for index = 1, #context.buttons do
 			local button = context.buttons[index]
 			if gui.pick_node(button.node, value.x, value.y) then
-				context.pressed_button = button
-				gui.play_flipbook(button.node, hash("btn_green_push"))
+				context.pressed_button, context.pressed_pointer = button, id
+				gui.play_flipbook(button.node, BUTTON_PUSH)
 				break
 			end
 		end
-	elseif value.released then
+	elseif value.released and context.pressed_pointer == id then
 		local button = context.pressed_button
-		context.pressed_button = nil
+		context.pressed_button, context.pressed_pointer = nil, nil
 		if button then
-			local activate = gui.pick_node(button.node, value.x, value.y)
-			gui.play_flipbook(button.node, hash("btn_green_normal"))
-			if activate then
-				return button.action
-			end
+			gui.play_flipbook(button.node, BUTTON_NORMAL)
+			if gui.pick_node(button.node, value.x, value.y) then return button.action end
 		end
 	end
 	return nil
+end
+
+function M.on_input(context, action_id, action)
+	if action_id ~= POINTER then return nil end
+	if action.touch then
+		for index = 1, #action.touch do
+			local value = action.touch[index]
+			local result = handle_pointer(context, value, value.id)
+			if result then return result end
+		end
+		return nil
+	end
+	return handle_pointer(context, action, "mouse")
 end
 
 function M.show_bucket(context, bucket_id, pending)
@@ -113,8 +123,9 @@ end
 
 function M.cancel_press(context)
 	if context.pressed_button then
-		gui.play_flipbook(context.pressed_button.node, hash("btn_green_normal"))
+		gui.play_flipbook(context.pressed_button.node, BUTTON_NORMAL)
 		context.pressed_button = nil
+		context.pressed_pointer = nil
 	end
 end
 

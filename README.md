@@ -12,6 +12,9 @@ Motion uses gravity and continuous circle/wall collisions, with a small
 background-generated route bank. Bounces follow contact normals, including
 repeat pin hits and side-wall rebounds. See [current physics](docs/PHYSICS.md)
 for the algorithm, configuration and the change from the original DAG plan.
+Pin contacts play `assets/sounds/collide.wav`; basket landing plays
+`assets/sounds/collect.wav` together with the score animation. Both assets are
+48 kHz stereo 16-bit PCM WAV files supported directly by Defold.
 
 Landing awards the configured basket score and persists it between launches.
 Debug builds expose a standalone ImGui **Cheats** button in the top-left corner.
@@ -27,10 +30,13 @@ constant enlarges the debug text by 2.5 without adding a gameplay config option.
 The overlay includes a semi-transparent dark full-screen GUI backdrop beneath
 the render text.
 The project uses the official Defold Dear ImGui extension 2.14.0.
-The latest physics changes
-have not been built, run or tested, as requested; visual review is required.
+The audit includes clean Lua syntax/lint checks. The full resource build is
+currently blocked by native ImGui diagnostics; desktop/mobile visual review
+remains outstanding. See the [audit report](docs/AUDIT.md) for exact scope and limits.
 
 Project documentation:
+
+- [Audit and refactor report](docs/AUDIT.md): findings, fixes, API checks and deferred work.
 
 - [Project rules](AGENTS.md) and [requirements](TASK.md).
 - [Architecture and implementation handoff](docs/ARCHITECTURE.md): modules,

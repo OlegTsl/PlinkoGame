@@ -86,8 +86,8 @@ function M.generate(parameters)
 	local basket_area = parameters.basket_area
 	local pin_radius = parameters.pin_radius
 
-	if not is_integer(count) then
-		return fail("basket_count must be an integer")
+	if not is_integer(count) or count < 3 then
+		return fail("basket_count must be an integer of at least 3 for the pin pyramid")
 	end
 	if type(limits) ~= "table" or not is_integer(limits.min_baskets)
 			or not is_integer(limits.max_baskets) or limits.min_baskets > limits.max_baskets then

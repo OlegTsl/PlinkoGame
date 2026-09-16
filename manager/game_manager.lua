@@ -2,47 +2,32 @@ local regeneration = require("model.regeneration")
 
 local M = {}
 
-local SAVE_APP_ID    = "plinko_game"
-local SAVE_FILE_NAME = "player"
+local SAVE_RETRY_SECONDS = 1
 
-function M.create(config, state, wall_now)
-	local has_save_path, save_path = pcall(sys.get_save_file, SAVE_APP_ID, SAVE_FILE_NAME)
+-- Owns gameplay state operations; persistence is supplied by the composition root.
+function M.create(config, state, wall_now, storage)
 	local manager = {}
-
-	function manager:load()
-		if not has_save_path then
-			return nil, save_path
-		end
-		local loaded, snapshot = pcall(sys.load, save_path)
-		if not loaded then
-			return nil, snapshot
-		end
-		if type(snapshot) ~= "table" or next(snapshot) == nil then
-			return nil, "save does not exist"
-		end
-		state:deserialize(snapshot)
-		return true
-	end
+	local last_failed_save
+	local save_error
+	local statistics
+	local inventory = {}
 
 	function manager:save()
 		if not state:is_dirty() then
 			return true
 		end
-		if not has_save_path then
-			return nil, save_path
-		end
-
-		local saved, result = pcall(sys.save, save_path, state:serialize())
+		local saved, result = storage:save(state:serialize())
 		if not saved then
 			return nil, result
 		end
 
 		state:set_dirty(false)
+		last_failed_save, save_error = nil, nil
 		return true
 	end
 
 	function manager:add_balls(count)
-		if type(count) ~= "number" or count < 1 or count ~= math.floor(count) then
+		if type(count) ~= "number" or count < 1 or count >= math.huge or count ~= math.floor(count) then
 			return nil, "Ball amount must be a positive integer"
 		end
 		state:set_balls(state:get_balls() + count)
@@ -56,10 +41,11 @@ function M.create(config, state, wall_now)
 		end
 		state:record_basket_hit(index)
 		state:set_score(state:get_score() + basket.score)
+		statistics = nil
 		return state:get_score()
 	end
 
-	function manager:get_statistics()
+	local function build_statistics()
 		local hits = state:get_basket_hits()
 		local total_hits = 0
 		for index = 1, #hits do
@@ -69,7 +55,7 @@ function M.create(config, state, wall_now)
 		for index = 1, #hits do
 			percentages[index] = total_hits > 0 and hits[index] * 100 / total_hits or 0
 		end
-		return {
+		statistics = {
 			hits = hits,
 			percentages = percentages,
 			total_hits = total_hits,
@@ -77,17 +63,27 @@ function M.create(config, state, wall_now)
 		}
 	end
 
-	function manager:reset_progress(current_wall_time)
-		if not has_save_path then
-			return nil, save_path
+	-- Copy the cached projection into caller-owned output, never expose the cache.
+	function manager:get_statistics(output)
+		if not statistics then build_statistics() end
+		local result = output or { hits = {}, percentages = {} }
+		for index = 1, #statistics.hits do
+			result.hits[index] = statistics.hits[index]
+			result.percentages[index] = statistics.percentages[index]
 		end
-		state:reset(config.balls.count, current_wall_time)
-		local erased, result = pcall(sys.save, save_path, {})
+		result.total_hits, result.score = statistics.total_hits, statistics.score
+		return result
+	end
+
+	function manager:reset_progress(current_wall_time)
+		-- Do not change live progress or request a reboot until deletion succeeds.
+		local erased, result = storage:save({})
 		if not erased then
 			return nil, result
 		end
+		state:reset(config.balls.count, current_wall_time)
 		state:set_dirty(false)
-		sys.reboot()
+		statistics = nil
 		return true
 	end
 
@@ -97,7 +93,8 @@ function M.create(config, state, wall_now)
 			state:get_regen_timestamp(),
 			config.balls.count,
 			config.balls.respawn_delay,
-			current_wall_time
+			current_wall_time,
+			inventory
 		)
 		if result.changed then
 			state:set_balls(result.balls)
@@ -107,6 +104,9 @@ function M.create(config, state, wall_now)
 	end
 
 	function manager:consume_balls(count, current_wall_time)
+		if type(count) ~= "number" or count < 1 or count >= math.huge or count % 1 ~= 0 then
+			return nil, "Ball amount must be a positive integer"
+		end
 		self:refresh_balls(current_wall_time)
 		local current = state:get_balls()
 		if current < count then
@@ -121,8 +121,14 @@ function M.create(config, state, wall_now)
 
 	function manager:update(current_wall_time)
 		local result = self:refresh_balls(current_wall_time)
-		self:save()
-		return result
+		if not last_failed_save or current_wall_time < last_failed_save
+			or current_wall_time - last_failed_save >= SAVE_RETRY_SECONDS then
+			local saved, error_message = self:save()
+			if not saved then
+				last_failed_save, save_error = current_wall_time, error_message
+			end
+		end
+		return result, save_error
 	end
 
 	function manager:final()
@@ -153,30 +159,17 @@ function M.create(config, state, wall_now)
 		return state:get_balls()
 	end
 
-	function manager:set_balls(value)
-		state:set_balls(value)
-	end
-
 	function manager:get_score()
 		return state:get_score()
-	end
-
-	function manager:set_score(value)
-		state:set_score(value)
 	end
 
 	function manager:get_regen_timestamp()
 		return state:get_regen_timestamp()
 	end
 
-	function manager:set_regen_timestamp(value)
-		state:set_regen_timestamp(value)
-	end
-
-	if not manager:load() then
-		state:set_balls(config.balls.count)
-		state:set_regen_timestamp(wall_now)
-	end
+	state:reset(config.balls.count, wall_now)
+	local snapshot = storage:load()
+	if snapshot then state:deserialize(snapshot) end
 	manager:refresh_balls(wall_now)
 	return manager
 end

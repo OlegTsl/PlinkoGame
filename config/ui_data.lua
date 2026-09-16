@@ -1,4 +1,4 @@
-return {
+local M = {
 	wave = {
 		duration    = 0.30,
 		start_scale = 1,
@@ -7,3 +7,5 @@ return {
 		pool_size   = 128,
 	},
 }
+
+return M
