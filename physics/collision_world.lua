@@ -3,12 +3,12 @@ local M = {}
 
 local function cell_key(x, y) return x .. ":" .. y end
 
-function M.create(layout, config)
+function M.create(layout, physics_data)
 	local world = {
-		config = config.physics,
-		gravity = config.physics.gravity_ratio * layout.basket_width,
-		radius = config.physics.ball_radius_ratio * layout.basket_width,
-		velocity_epsilon = config.physics.velocity_epsilon_ratio * layout.basket_width,
+		config = physics_data,
+		gravity = physics_data.gravity_ratio * layout.basket_width,
+		radius = physics_data.ball_radius_ratio * layout.basket_width,
+		velocity_epsilon = physics_data.velocity_epsilon_ratio * layout.basket_width,
 		cell_size = layout.basket_width,
 		cells = {}, max_pin_radius = 0,
 		layout = layout,
@@ -64,7 +64,7 @@ local function horizontal(world, s, height, normal, horizon, accept)
 	end
 end
 
-function M.first_hit(world, s, horizon)
+function M.first_hit(world, s, horizon, ignore_landing)
 	local best
 	local function offer(t, nx, ny, kind, id, restitution)
 		if t >= 0 and t <= horizon and (not best or t < best.time) then
@@ -133,12 +133,14 @@ function M.first_hit(world, s, horizon)
 				end
 			end
 		end
-		for _, basket in ipairs(baskets) do
-			horizontal(world, s, basket.landing_y, 1, horizon, function(t, x)
-				if x >= basket.left + half + r and x <= basket.right - half - r then
-					offer(t, 0, 1, "landed", basket.id, 0)
-				end
-			end)
+		if not ignore_landing then
+			for _, basket in ipairs(baskets) do
+				horizontal(world, s, basket.landing_y, 1, horizon, function(t, x)
+					if x >= basket.left + half + r and x <= basket.right - half - r then
+						offer(t, 0, 1, "landed", basket.id, 0)
+					end
+				end)
+			end
 		end
 	end
 	return best

@@ -1,4 +1,6 @@
 local game_config     = require("config.game_config")
+local physics_data    = require("config.physics_data")
+local ui_data         = require("config.ui_data")
 local game_controller = require("controller.game_controller")
 local game_manager    = require("manager.game_manager")
 local game_state      = require("model.game_state")
@@ -7,14 +9,15 @@ local hud_view        = require("view.hud_view")
 local level_builder   = require("view.level_builder")
 local viewport        = require("view.viewport")
 
-local DESIGN_WIDTH  = 720
-local DESIGN_HEIGHT = 1280
+local DESIGN_WIDTH  = 560
+local DESIGN_HEIGHT = 780
+local MULTI_SPAWN_COUNT = 5
 
 local function show_error(message)
 	print("ERROR: " .. message)
 	local status = gui.get_node("status_label")
 	gui.set_text(status, message)
-	gui.set_color(status, vmath.vector4(1, 0.35, 0.35, 1))
+	gui.set_color(status, vmath.vector4(1, 0.25, 0.25, 1))
 end
 
 local function apply_events(self, events)
@@ -27,6 +30,12 @@ local function apply_events(self, events)
 		if event.type == "ball_spawned" or event.type == "spawn_pending" then
 			hud_view.show_bucket(self.hud, event.target_bucket, event.type == "spawn_pending")
 			print("Selected bucket: " .. event.target_bucket)
+		elseif event.type == "ball_landed" then
+			level_builder.play_score_pop(self.level_builder, event.target_bucket)
+			local _, awarded_score = self.manager:get_basket(event.target_bucket)
+			local score = self.manager:get_score() + awarded_score
+			self.manager:set_score(score)
+			hud_view.set_score(self.hud, score)
 		elseif event.type == "motion_error" then
 			hud_view.show_error(self.hud, event.message)
 			print(event.message)
@@ -35,8 +44,9 @@ local function apply_events(self, events)
 end
 
 function init(self)
+	local wall_now = os.time()
 	local state  = game_state.create()
-	self.manager = game_manager.create(game_config, state, os.time())
+	self.manager = game_manager.create(game_config, state, wall_now)
 	self.paused = false
 
 	self.level_builder = level_builder.create()
@@ -56,13 +66,19 @@ function init(self)
 	end
 
 	self.layout = layout
-	self.controller, error_message = game_controller.create(game_config, layout)
+	self.controller, error_message = game_controller.create(game_config, physics_data, layout)
 	if not self.controller then
 		show_error(error_message)
 		return
 	end
-	self.ball_view = ball_view.create(layout, game_config)
-	self.hud = hud_view.create()
+	self.ball_view = ball_view.create(layout, game_config.art, physics_data, ui_data)
+	local inventory = self.manager:refresh_balls(wall_now)
+	self.hud = hud_view.create(
+		self.manager:get_score(),
+		inventory.balls,
+		self.manager:get_ball_limit(),
+		inventory.seconds_to_next
+	)
 	self.viewport = viewport.create(
 		gui.get_node("content_root"),
 		gui.get_node("screen_background"),
@@ -70,7 +86,9 @@ function init(self)
 		DESIGN_HEIGHT
 	)
 	viewport.update(self.viewport)
-	gui.set_text(gui.get_node("status_label"), "Press Spawn")
+	local status = gui.get_node("status_label")
+	gui.set_text(status, "Press Play")
+	gui.set_color(status, vmath.vector4(1, 1, 1, 1))
 	msg.post(".", "acquire_input_focus")
 	window.set_listener(function(_, event)
 		if event == window.WINDOW_EVENT_FOCUS_LOST then
@@ -91,7 +109,18 @@ function update(self, dt)
 		end))
 	end
 	if self.manager then
-		self.manager:update()
+		local inventory = self.manager:update(os.time())
+		if self.hud then
+			hud_view.set_inventory(
+				self.hud,
+				inventory.balls,
+				self.manager:get_ball_limit(),
+				inventory.seconds_to_next
+			)
+		end
+	end
+	if self.hud then
+		hud_view.update(self.hud, dt)
 	end
 	if self.viewport then
 		viewport.update(self.viewport)
@@ -102,11 +131,31 @@ function on_input(self, action_id, action)
 	if not self.controller or not self.hud then
 		return false
 	end
-	if hud_view.on_input(self.hud, action_id, action) == "spawn" then
-		local events, error_message = game_controller.spawn(self.controller)
+	local action_name = hud_view.on_input(self.hud, action_id, action)
+	if action_name == "spawn" or action_name == "spawn_many" then
+		local wall_now = os.time()
+		local inventory = self.manager:refresh_balls(wall_now)
+		local cost = action_name == "spawn_many" and MULTI_SPAWN_COUNT or 1
+		if inventory.balls < cost then
+			hud_view.show_error(self.hud, "Not enough balls")
+			return true
+		end
+		local events, error_message
+		if action_name == "spawn_many" then
+			events, error_message = game_controller.spawn_many(self.controller, MULTI_SPAWN_COUNT)
+		else
+			events, error_message = game_controller.spawn(self.controller)
+		end
 		if not events then
 			hud_view.show_error(self.hud, error_message)
 		else
+			inventory = self.manager:consume_balls(cost, wall_now)
+			hud_view.set_inventory(
+				self.hud,
+				inventory.balls,
+				self.manager:get_ball_limit(),
+				inventory.seconds_to_next
+			)
 			apply_events(self, events)
 		end
 		return true

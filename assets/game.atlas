@@ -16,3 +16,9 @@ images {
 images {
   image: "/assets/btn_green_push.png"
 }
+images {
+  image: "/assets/panel.png"
+}
+images {
+  image: "/assets/timer.png"
+}

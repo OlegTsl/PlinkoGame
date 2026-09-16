@@ -7,8 +7,8 @@ main_collection = /main/main.collectionc
 render = /builtins/render/default.renderc
 
 [display]
-width = 720
-height = 1280
+width = 560
+height = 780
 high_dpi = 1
 
 [html5]

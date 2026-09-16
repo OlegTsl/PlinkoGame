@@ -12,12 +12,12 @@ function M.create(config, layout)
 	return bank
 end
 
-local function launch(bank, world, config)
+local function launch(bank, world, physics_data)
 	local ux, uvx, uvy
 	ux, bank.seed = random.next(bank.seed)
 	uvx, bank.seed = random.next(bank.seed)
 	uvy, bank.seed = random.next(bank.seed)
-	local cfg = config.physics
+	local cfg = physics_data
 	local layout, step = world.layout, world.cell_size
 	local x = layout.spawn.x + (2 * ux - 1) * cfg.spawn_spread_ratio * step
 	local vx = (2 * uvx - 1) * cfg.launch_vx_ratio * step
@@ -26,11 +26,11 @@ local function launch(bank, world, config)
 	return simulator.create(x, layout.spawn.y, vx, vy)
 end
 
-function M.update(bank, world, config, deadline_reached)
+function M.update(bank, world, config, physics_data, deadline_reached)
 	if bank.count >= bank.capacity then return end
 	for _ = 1, config.motion.work_units_per_frame do
 		if deadline_reached and deadline_reached() then return end
-		if not bank.candidate then bank.candidate = launch(bank, world, config) end
+		if not bank.candidate then bank.candidate = launch(bank, world, physics_data) end
 		local status, route = simulator.advance(bank.candidate, world)
 		if status ~= "running" then
 			bank.candidate = nil

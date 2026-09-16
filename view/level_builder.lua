@@ -1,6 +1,8 @@
 local level_layout = require("model.level_layout")
 
 local M = {}
+local SCORE_POP_DURATION = 0.35
+local SCORE_POP_SCALE = 2.4
 
 local DEFAULT_NODE_IDS = {
 	level_root            = "level_root",
@@ -9,8 +11,11 @@ local DEFAULT_NODE_IDS = {
 	basket_area_anchor    = "basket_area_anchor",
 	pin_template          = "pin_template",
 	basket_template       = "basket_template",
-	basket_fill_template  = "basket_fill_template",
+	basket_fill_template       = "basket_fill_template",
+	basket_left_side_template  = "basket_left_side_template",
+	basket_right_side_template = "basket_right_side_template",
 	basket_label_template = "basket_label_template",
+	basket_score_pop_template = "basket_score_pop_template",
 }
 
 local function resolve_nodes(ids)
@@ -61,6 +66,8 @@ local function delete_dynamic_nodes(context)
 		gui.delete_node(context.dynamic_roots[index])
 	end
 	context.dynamic_roots = {}
+	context.basket_score_pops = {}
+	context.score_pop_versions = {}
 	context.layout        = nil
 end
 
@@ -98,31 +105,33 @@ local function create_pin_nodes(context, layout)
 end
 
 local function create_basket_nodes(context, layout)
-	local template_size      = gui.get_size(context.nodes.basket_template)
-	local fill_template_size = gui.get_size(context.nodes.basket_fill_template)
-	local horizontal_inset   = math.max(0, template_size.x - fill_template_size.x)
-	local vertical_inset     = math.max(0, template_size.y - fill_template_size.y)
-
 	for index = 1, #layout.baskets do
 		local basket = layout.baskets[index]
 		local clones = gui.clone_tree(context.nodes.basket_template)
-		local root   = get_clone(clones, DEFAULT_NODE_IDS.basket_template)
-		local fill   = get_clone(clones, DEFAULT_NODE_IDS.basket_fill_template)
-		local label  = get_clone(clones, DEFAULT_NODE_IDS.basket_label_template)
-		if not root or not fill or not label then
+		local root  = get_clone(clones, DEFAULT_NODE_IDS.basket_template)
+		local fill  = get_clone(clones, DEFAULT_NODE_IDS.basket_fill_template)
+		local left  = get_clone(clones, DEFAULT_NODE_IDS.basket_left_side_template)
+		local right = get_clone(clones, DEFAULT_NODE_IDS.basket_right_side_template)
+		local label = get_clone(clones, DEFAULT_NODE_IDS.basket_label_template)
+		local score_pop = get_clone(clones, DEFAULT_NODE_IDS.basket_score_pop_template)
+		if not root or not fill or not left or not right or not label or not score_pop then
 			error("LevelBuilder: basket template tree is incomplete")
 		end
 
-		gui.set_parent  (root, context.nodes.level_root)
+		local side_width = gui.get_size(left).x
+		gui.set_parent(root, context.nodes.level_root)
 		gui.set_position(root, to_gui_position(layout, basket.x, basket.y))
-		gui.set_size    (root, vmath.vector3(basket.width, basket.height, 0))
-		gui.set_size    (fill, vmath.vector3(
-			math.max(0, basket.width - horizontal_inset),
-			math.max(0, basket.height - vertical_inset),
-			0
-		))
+		gui.set_size(fill, vmath.vector3(math.max(0, basket.width - side_width * 2), basket.height, 0))
+		gui.set_position(left, vmath.vector3(-basket.width * 0.5 + side_width * 0.5, 0, 0))
+		gui.set_position(right, vmath.vector3(basket.width * 0.5 - side_width * 0.5, 0, 0))
+		gui.set_size(left, vmath.vector3(side_width, basket.height, 0))
+		gui.set_size(right, vmath.vector3(side_width, basket.height, 0))
 		gui.set_text(label, tostring(basket.score))
+		gui.set_text(score_pop, tostring(basket.score))
 		set_enabled_for_tree(clones, true)
+		gui.set_enabled(score_pop, false)
+		context.basket_score_pops[basket.id] = score_pop
+		context.score_pop_versions[basket.id] = 0
 		context.dynamic_roots[#context.dynamic_roots + 1] = root
 	end
 end
@@ -131,6 +140,8 @@ function M.create(node_ids)
 	local context = {
 		nodes         = resolve_nodes(node_ids),
 		dynamic_roots = {},
+		basket_score_pops = {},
+		score_pop_versions = {},
 		layout        = nil,
 	}
 
@@ -140,6 +151,42 @@ function M.create(node_ids)
 	gui.set_enabled(context.nodes.pin_template, false)
 	gui.set_enabled(context.nodes.basket_template, false)
 	return context
+end
+
+function M.play_score_pop(context, basket_id)
+	local node = context.basket_score_pops[basket_id]
+	if not node then
+		return
+	end
+
+	local version = (context.score_pop_versions[basket_id] or 0) + 1
+	context.score_pop_versions[basket_id] = version
+	gui.set_enabled(node, true)
+	gui.set_scale(node, vmath.vector3(1, 1, 1))
+	local color = gui.get_color(node)
+	color.w = 1
+	gui.set_color(node, color)
+
+	gui.animate(
+		node,
+		gui.PROP_SCALE,
+		vmath.vector3(SCORE_POP_SCALE, SCORE_POP_SCALE, 1),
+		gui.EASING_OUTQUAD,
+		SCORE_POP_DURATION
+	)
+	gui.animate(
+		node,
+		gui.PROP_COLOR,
+		vmath.vector4(color.x, color.y, color.z, 0),
+		gui.EASING_INQUAD,
+		SCORE_POP_DURATION,
+		0,
+		function()
+			if context.score_pop_versions[basket_id] == version then
+				gui.set_enabled(node, false)
+			end
+		end
+	)
 end
 
 function M.build(context, specification)
@@ -152,9 +199,8 @@ function M.build(context, specification)
 		return nil, error_message
 	end
 	context.pin_art = specification.pin_art
-	local frame = gui.get_size(context.nodes.basket_template)
-	local fill = gui.get_size(context.nodes.basket_fill_template)
-	layout.divider_half_width = (frame.x - fill.x) * 0.5
+	local side = gui.get_size(context.nodes.basket_left_side_template)
+	layout.divider_half_width = side.x * 0.5
 
 	create_pin_nodes(context, layout)
 	create_basket_nodes(context, layout)

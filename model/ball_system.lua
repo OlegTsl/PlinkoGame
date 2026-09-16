@@ -9,7 +9,7 @@ local function push(events, event)
 	events[#events + 1] = event
 end
 
-function M.create(config, layout)
+function M.create(config, physics_data, layout)
 	local weight_sum = 0
 	for _, item in ipairs(config.baskets.items) do
 		if item.weight < 0 then return nil, "Negative basket weight" end
@@ -20,8 +20,9 @@ function M.create(config, layout)
 	end
 	local context = {
 		config = config,
+		physics = physics_data,
 		layout = layout,
-		world = collision_world.create(layout, config),
+		world = collision_world.create(layout, physics_data),
 		bank = route_bank.create(config, layout),
 		active = {},
 		next_ball_id = 1,
@@ -41,7 +42,6 @@ local function activate(context, route, next_visual_seed)
 		segment_index = 1,
 		next_contact_index = 1,
 		phase = "falling",
-		pop_elapsed = 0,
 	}
 	context.next_ball_id = context.next_ball_id + 1
 	context.visual_seed = next_visual_seed
@@ -111,7 +111,12 @@ local function update_falling(context, ball, step, events)
 	})
 
 	if ball.elapsed >= ball.route.duration then
-		ball.phase = "popping"
+		local segment = ball.route.segments[#ball.route.segments]
+		ball.phase = "exiting"
+		ball.exit_x = ball.route.final_position.x
+		ball.exit_y = ball.route.final_position.y
+		ball.exit_vx = segment.vx
+		ball.exit_vy = segment.vy - segment.gravity * segment.duration
 		push(events, {
 			type = "ball_landed",
 			ball_id = ball.id,
@@ -120,35 +125,57 @@ local function update_falling(context, ball, step, events)
 	end
 end
 
-local function update_popping(context, ball, step, events)
-	local pop = context.config.ui.pop
-	local duration = pop.up_duration + pop.down_duration
-	ball.pop_elapsed = math.min(ball.pop_elapsed + step, duration)
+local function update_exiting(context, ball, step, events)
+	local remaining = step
+	local contacts = 0
+	while remaining > context.physics.time_epsilon
+		and contacts < context.physics.max_contacts do
+		local state = {
+			x = ball.exit_x,
+			y = ball.exit_y,
+			vx = ball.exit_vx,
+			vy = ball.exit_vy,
+		}
+		local hit = collision_world.first_hit(context.world, state, remaining, true)
+		local elapsed = hit and hit.time or remaining
+		ball.exit_x = ball.exit_x + ball.exit_vx * elapsed
+		ball.exit_y = ball.exit_y + ball.exit_vy * elapsed
+			- 0.5 * context.world.gravity * elapsed * elapsed
+		ball.exit_vy = ball.exit_vy - context.world.gravity * elapsed
+		remaining = remaining - elapsed
 
-	local scale
-	local alpha = 1
-	if ball.pop_elapsed <= pop.up_duration then
-		local progress = ball.pop_elapsed / pop.up_duration
-		scale = 1 + (pop.max_scale - 1) * progress
-	else
-		local progress = (ball.pop_elapsed - pop.up_duration) / pop.down_duration
-		scale = pop.max_scale * (1 - progress)
-		alpha = 1 - progress
+		if not hit then
+			break
+		end
+
+		local normal_velocity = ball.exit_vx * hit.nx + ball.exit_vy * hit.ny
+		local tangent_x = ball.exit_vx - normal_velocity * hit.nx
+		local tangent_y = ball.exit_vy - normal_velocity * hit.ny
+		ball.exit_vx = context.physics.tangent_retention * tangent_x
+			- hit.restitution * normal_velocity * hit.nx
+		ball.exit_vy = context.physics.tangent_retention * tangent_y
+			- hit.restitution * normal_velocity * hit.ny
+		contacts = contacts + 1
 	end
+
+	local position = {
+		x = ball.exit_x,
+		y = ball.exit_y,
+	}
 	push(events, {
 		type = "ball_pose",
 		ball_id = ball.id,
-		position = ball.route.final_position,
-		scale = scale,
-		alpha = alpha,
+		position = position,
+		scale = 1,
+		alpha = 1,
 	})
-	return ball.pop_elapsed >= duration
+	return position.y + context.world.radius < 0
 end
 
 function M.update(context, dt, deadline_reached)
 	local events = {}
 	if not context.error then
-		route_bank.update(context.bank, context.world, context.config, deadline_reached)
+		route_bank.update(context.bank, context.world, context.config, context.physics, deadline_reached)
 	end
 	if context.pending and not context.error then
 		local target = context.pending.target
@@ -169,7 +196,7 @@ function M.update(context, dt, deadline_reached)
 		if ball.phase == "falling" then
 			update_falling(context, ball, step, events)
 		else
-			removed = update_popping(context, ball, step, events)
+			removed = update_exiting(context, ball, step, events)
 		end
 
 		if removed then

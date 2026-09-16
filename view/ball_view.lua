@@ -8,14 +8,16 @@ local function to_gui_position(layout, point)
 	)
 end
 
-function M.create(layout, config)
+function M.create(layout, art_data, physics_data, ui_data)
 	local pins = {}
 	for index = 1, #layout.pins do
 		pins[layout.pins[index].id] = layout.pins[index]
 	end
 	local context = {
 		layout = layout,
-		config = config,
+		art = art_data,
+		physics = physics_data,
+		ui = ui_data,
 		level_root = gui.get_node("level_root"),
 		ball_template = gui.get_node("spawn_anchor"),
 		wave_template = gui.get_node("wave_template"),
@@ -43,8 +45,8 @@ local function acquire(context, template, pool)
 end
 
 local function ball_position(context, position, scale)
-	local art = context.config.art.ball
-	local size = context.config.physics.ball_radius_ratio * context.layout.basket_width
+	local art = context.art.ball
+	local size = context.physics.ball_radius_ratio * context.layout.basket_width
 		* art.image_size / art.radius * scale
 	local point = to_gui_position(context.layout, position)
 	point.x = point.x + (0.5 - art.center_x / art.image_size) * size
@@ -54,8 +56,8 @@ end
 
 local function spawn_ball(context, event)
 	local node = acquire(context, context.ball_template, context.free_balls)
-	local art = context.config.art.ball
-	local size = context.config.physics.ball_radius_ratio * context.layout.basket_width
+	local art = context.art.ball
+	local size = context.physics.ball_radius_ratio * context.layout.basket_width
 		* art.image_size / art.radius
 	gui.set_size(node, vmath.vector3(size, size, 0))
 	gui.set_position(node, ball_position(context, event.position, 1))
@@ -77,8 +79,9 @@ local function apply_pose(context, event)
 end
 
 local function wave_pose(context, item)
-	local wave = context.config.ui.wave
-	local progress = item.age / wave.duration
+	local wave = context.ui.wave
+	local progress = math.min(math.max(item.age / wave.duration, 0), 1)
+	progress = progress * progress * (3 - 2 * progress)
 	local scale = wave.start_scale + (wave.end_scale - wave.start_scale) * progress
 	gui.set_scale(item.node, vmath.vector3(scale, scale, 1))
 	gui.set_color(item.node, vmath.vector4(1, 1, 1, wave.start_alpha * (1 - progress)))
@@ -86,16 +89,17 @@ end
 
 local function spawn_wave(context, event)
 	local pin = context.pins[event.pin_id]
-	if not pin or event.age >= context.config.ui.wave.duration then
+	if not pin or event.age >= context.ui.wave.duration then
 		return
 	end
 	if #context.free_waves == 0 then
-		if context.wave_count >= context.config.ui.wave.pool_size then return end
+		if context.wave_count >= context.ui.wave.pool_size then return end
 		context.wave_count = context.wave_count + 1
 	end
 	local node = acquire(context, context.wave_template, context.free_waves)
 	gui.set_position(node, to_gui_position(context.layout, pin))
-	gui.set_size(node, vmath.vector3(pin.radius * 2, pin.radius * 2, 0))
+	local diameter = pin.radius * 2
+	gui.set_size(node, vmath.vector3(diameter, diameter, 0))
 	local item = { node = node, age = event.age }
 	wave_pose(context, item)
 	context.waves[#context.waves + 1] = item
@@ -122,7 +126,7 @@ function M.apply_events(context, events)
 end
 
 function M.update(context, dt)
-	local wave = context.config.ui.wave
+	local wave = context.ui.wave
 	for index = #context.waves, 1, -1 do
 		local item = context.waves[index]
 		item.age = item.age + math.max(dt, 0)

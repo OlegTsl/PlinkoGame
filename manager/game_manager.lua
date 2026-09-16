@@ -1,3 +1,5 @@
+local regeneration = require("model.regeneration")
+
 local M = {}
 
 local SAVE_APP_ID    = "plinko_game"
@@ -39,8 +41,38 @@ function M.create(config, state, wall_now)
 		return true
 	end
 
-	function manager:update()
-		return self:save()
+	function manager:refresh_balls(current_wall_time)
+		local result = regeneration.calculate(
+			state:get_balls(),
+			state:get_regen_timestamp(),
+			config.balls.count,
+			config.balls.respawn_delay,
+			current_wall_time
+		)
+		if result.changed then
+			state:set_balls(result.balls)
+			state:set_regen_timestamp(result.regen_timestamp)
+		end
+		return result
+	end
+
+	function manager:consume_balls(count, current_wall_time)
+		self:refresh_balls(current_wall_time)
+		local current = state:get_balls()
+		if current < count then
+			return nil, "Not enough balls"
+		end
+		if current >= config.balls.count then
+			state:set_regen_timestamp(current_wall_time)
+		end
+		state:set_balls(current - count)
+		return self:refresh_balls(current_wall_time)
+	end
+
+	function manager:update(current_wall_time)
+		local result = self:refresh_balls(current_wall_time)
+		self:save()
+		return result
 	end
 
 	function manager:final()
@@ -95,6 +127,7 @@ function M.create(config, state, wall_now)
 		state:set_balls(config.balls.count)
 		state:set_regen_timestamp(wall_now)
 	end
+	manager:refresh_balls(wall_now)
 	return manager
 end
 

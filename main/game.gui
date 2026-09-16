@@ -9,12 +9,12 @@ textures {
 }
 nodes {
   position {
-    x: 360.0
-    y: 640.0
+    x: 280.0
+    y: 390.0
   }
   size {
-    x: 720.0
-    y: 1280.0
+    x: 560.0
+    y: 780.0
   }
   color {
     x: 0.055
@@ -27,16 +27,13 @@ nodes {
 }
 nodes {
   position {
-    x: 360.0
-    y: 640.0
+    x: 280.0
+    y: 390.0
   }
   type: TYPE_BOX
   id: "content_root"
 }
 nodes {
-  position {
-    y: 24.0
-  }
   size {
     x: 560.0
     y: 780.0
@@ -104,8 +101,8 @@ nodes {
     y: 350.0
   }
   size {
-    x: 24.0
-    y: 24.0
+    x: 36.0
+    y: 36.0
   }
   type: TYPE_BOX
   texture: "game/ball_2"
@@ -136,10 +133,6 @@ nodes {
     x: 340.0
     y: -334.0
   }
-  size {
-    x: 52.0
-    y: 84.0
-  }
   type: TYPE_BOX
   id: "basket_template"
   parent: "level_root"
@@ -149,8 +142,8 @@ nodes {
 }
 nodes {
   size {
-    x: 48.0
-    y: 80.0
+    x: 44.0
+    y: 84.0
   }
   color {
     x: 0.16
@@ -159,6 +152,33 @@ nodes {
   }
   type: TYPE_BOX
   id: "basket_fill_template"
+  parent: "basket_template"
+  inherit_alpha: true
+  alpha: 0.5
+}
+nodes {
+  position {
+    x: -24.0
+  }
+  size {
+    x: 4.0
+    y: 84.0
+  }
+  type: TYPE_BOX
+  id: "basket_left_side_template"
+  parent: "basket_template"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 24.0
+  }
+  size {
+    x: 4.0
+    y: 84.0
+  }
+  type: TYPE_BOX
+  id: "basket_right_side_template"
   parent: "basket_template"
   inherit_alpha: true
 }
@@ -179,51 +199,71 @@ nodes {
 }
 nodes {
   position {
-    y: 532.0
+    y: -1.0
   }
   size {
-    x: 400.0
-    y: 70.0
-  }
-  color {
-    x: 0.75
-    y: 0.34
-    z: 0.98
+    x: 48.0
+    y: 32.0
   }
   type: TYPE_TEXT
-  text: "Plinko"
+  text: "100"
   font: "default"
-  id: "title_label"
-  parent: "content_root"
+  id: "basket_score_pop_template"
+  parent: "basket_template"
   inherit_alpha: true
+  enabled: false
 }
 nodes {
   position {
-    y: -550.0
+    x: -272.0
+    y: 311.0
   }
   size {
-    x: 520.0
-    y: 40.0
+    x: 100.0
+    y: 20.0
   }
   color {
-    x: 0.72
-    y: 0.82
-    z: 0.9
+    x: 1.0
+    y: 1.0
+    z: 1.0
   }
   type: TYPE_TEXT
-  text: "Press Spawn"
+  text: "Press Spin"
   font: "default"
   id: "status_label"
+  pivot: PIVOT_NW
   parent: "content_root"
   inherit_alpha: true
 }
 nodes {
   position {
-    y: -470.0
+    x: 7.0
+    y: 367.0
+  }
+  scale {
+    x: 2.0
+    y: 2.0
+    z: 2.0
   }
   size {
-    x: 240.0
-    y: 72.0
+    x: 100.0
+    y: 20.0
+  }
+  type: TYPE_TEXT
+  text: "Score: 0"
+  font: "default"
+  id: "score_label"
+  parent: "content_root"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 230.0
+    y: 340.0
+  }
+  size {
+    x: 84.0
+    y: 84.0
   }
   type: TYPE_BOX
   texture: "game/btn_green_normal"
@@ -232,15 +272,143 @@ nodes {
   inherit_alpha: true
 }
 nodes {
+  position {
+    y: 7.0
+  }
+  scale {
+    x: 1.5
+    y: 1.5
+    z: 1.5
+  }
   size {
-    x: 220.0
-    y: 48.0
+    x: 35.0
+    y: 20.0
   }
   type: TYPE_TEXT
-  text: "Spawn"
+  text: "Play"
   font: "default"
   id: "spawn_button_label"
   parent: "spawn_button"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: 146.0
+    y: 341.0
+  }
+  size {
+    x: 84.0
+    y: 84.0
+  }
+  type: TYPE_BOX
+  texture: "game/btn_green_normal"
+  id: "spawn_many_button"
+  parent: "content_root"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    y: 7.0
+  }
+  scale {
+    x: 1.5
+    y: 1.5
+    z: 1.5
+  }
+  size {
+    x: 35.0
+    y: 20.0
+  }
+  type: TYPE_TEXT
+  text: "x5"
+  font: "default"
+  id: "spawn_many_button_label"
+  parent: "spawn_many_button"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: -220.0
+    y: 356.0
+  }
+  scale {
+    x: 0.8
+    y: 0.8
+    z: 0.8
+  }
+  size {
+    x: 142.0
+    y: 78.0
+  }
+  type: TYPE_BOX
+  texture: "game/panel"
+  id: "balls_panel"
+  parent: "content_root"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    y: 14.5
+  }
+  scale {
+    x: 2.0
+    y: 2.0
+    z: 2.0
+  }
+  size {
+    x: 60.0
+    y: 15.0
+  }
+  color {
+    x: 0.7019608
+    y: 0.4
+    z: 0.5019608
+  }
+  type: TYPE_TEXT
+  text: "5"
+  font: "default"
+  id: "balls_count_label"
+  parent: "balls_panel"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    x: -220.0
+    y: 339.0
+  }
+  size {
+    x: 110.0
+    y: 30.0
+  }
+  type: TYPE_BOX
+  texture: "game/timer"
+  id: "regen_timer_panel"
+  parent: "content_root"
+  inherit_alpha: true
+}
+nodes {
+  position {
+    y: 2.0
+  }
+  scale {
+    x: 0.8
+    y: 0.8
+    z: 0.8
+  }
+  size {
+    x: 110.0
+    y: 30.0
+  }
+  color {
+    x: 0.4
+    y: 0.5019608
+    z: 0.9019608
+  }
+  type: TYPE_TEXT
+  text: "+1 in 00:00:00"
+  font: "default"
+  id: "regen_timer_label"
+  parent: "regen_timer_panel"
   inherit_alpha: true
 }
 material: "/builtins/materials/gui.material"
