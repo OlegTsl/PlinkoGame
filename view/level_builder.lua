@@ -2,20 +2,20 @@ local level_layout = require("model.level_layout")
 
 local M = {}
 local SCORE_POP_DURATION = 0.35
-local SCORE_POP_SCALE = 2.4
+local SCORE_POP_SCALE    = 2.4
 
 local DEFAULT_NODE_IDS = {
-	level_root            = "level_root",
-	spawn_anchor          = "spawn_anchor",
-	pin_area_anchor       = "pin_area_anchor",
-	basket_area_anchor    = "basket_area_anchor",
-	pin_template          = "pin_template",
-	basket_template       = "basket_template",
+	level_root                 = "level_root",
+	spawn_anchor               = "spawn_anchor",
+	pin_area_anchor            = "pin_area_anchor",
+	basket_area_anchor         = "basket_area_anchor",
+	pin_template               = "pin_template",
+	basket_template            = "basket_template",
 	basket_fill_template       = "basket_fill_template",
 	basket_left_side_template  = "basket_left_side_template",
 	basket_right_side_template = "basket_right_side_template",
-	basket_label_template = "basket_label_template",
-	basket_score_pop_template = "basket_score_pop_template",
+	basket_label_template      = "basket_label_template",
+	basket_score_pop_template  = "basket_score_pop_template",
 }
 
 local function resolve_nodes(ids)

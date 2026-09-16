@@ -41,6 +41,56 @@ function M.create(config, state, wall_now)
 		return true
 	end
 
+	function manager:add_balls(count)
+		if type(count) ~= "number" or count < 1 or count ~= math.floor(count) then
+			return nil, "Ball amount must be a positive integer"
+		end
+		state:set_balls(state:get_balls() + count)
+		return state:get_balls()
+	end
+
+	function manager:record_basket_hit(index)
+		local basket = config.baskets.items[index]
+		if not basket then
+			return nil, "Invalid basket index"
+		end
+		state:record_basket_hit(index)
+		state:set_score(state:get_score() + basket.score)
+		return state:get_score()
+	end
+
+	function manager:get_statistics()
+		local hits = state:get_basket_hits()
+		local total_hits = 0
+		for index = 1, #hits do
+			total_hits = total_hits + hits[index]
+		end
+		local percentages = {}
+		for index = 1, #hits do
+			percentages[index] = total_hits > 0 and hits[index] * 100 / total_hits or 0
+		end
+		return {
+			hits = hits,
+			percentages = percentages,
+			total_hits = total_hits,
+			score = state:get_score(),
+		}
+	end
+
+	function manager:reset_progress(current_wall_time)
+		if not has_save_path then
+			return nil, save_path
+		end
+		state:reset(config.balls.count, current_wall_time)
+		local erased, result = pcall(sys.save, save_path, {})
+		if not erased then
+			return nil, result
+		end
+		state:set_dirty(false)
+		sys.reboot()
+		return true
+	end
+
 	function manager:refresh_balls(current_wall_time)
 		local result = regeneration.calculate(
 			state:get_balls(),

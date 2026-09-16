@@ -7,3 +7,11 @@ touch_trigger {
   input: TOUCH_MULTI
   action: "pointer"
 }
+key_trigger {
+  input: KEY_BACKQUOTE
+  action: "toggle_debug_statistics"
+}
+key_trigger {
+  input: KEY_TILDE
+  action: "toggle_debug_statistics"
+}

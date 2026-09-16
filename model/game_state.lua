@@ -1,9 +1,21 @@
 local M = {}
 
-function M.create()
+local function non_negative_integer(value, fallback)
+	if type(value) ~= "number" or value < 0 or value ~= value then
+		return fallback
+	end
+	return math.floor(value)
+end
+
+function M.create(basket_count)
+	assert(type(basket_count) == "number" and basket_count >= 1, "basket_count must be positive")
 	local balls = 0
 	local score = 0
 	local regen_timestamp = 0
+	local basket_hits = {}
+	for index = 1, basket_count do
+		basket_hits[index] = 0
+	end
 	local dirty = false
 	local state = {}
 
@@ -43,6 +55,34 @@ function M.create()
 		dirty = true
 	end
 
+	function state:get_basket_hit(index)
+		return basket_hits[index]
+	end
+
+	function state:record_basket_hit(index)
+		assert(basket_hits[index] ~= nil, "invalid basket index")
+		basket_hits[index] = basket_hits[index] + 1
+		dirty = true
+	end
+
+	function state:get_basket_hits()
+		local copy = {}
+		for index = 1, basket_count do
+			copy[index] = basket_hits[index]
+		end
+		return copy
+	end
+
+	function state:reset(initial_balls, current_wall_time)
+		balls = non_negative_integer(initial_balls, 0)
+		score = 0
+		regen_timestamp = non_negative_integer(current_wall_time, 0)
+		for index = 1, basket_count do
+			basket_hits[index] = 0
+		end
+		dirty = true
+	end
+
 	function state:is_dirty()
 		return dirty
 	end
@@ -56,13 +96,19 @@ function M.create()
 			balls = balls,
 			score = score,
 			regen_timestamp = regen_timestamp,
+			basket_hits = state:get_basket_hits(),
 		}
 	end
 
 	function state:deserialize(snapshot)
-		balls = snapshot.balls or 0
-		score = snapshot.score or 0
-		regen_timestamp = snapshot.regen_timestamp or 0
+		assert(type(snapshot) == "table", "snapshot must be a table")
+		balls = non_negative_integer(snapshot.balls, 0)
+		score = non_negative_integer(snapshot.score, 0)
+		regen_timestamp = non_negative_integer(snapshot.regen_timestamp, 0)
+		local saved_hits = type(snapshot.basket_hits) == "table" and snapshot.basket_hits or {}
+		for index = 1, basket_count do
+			basket_hits[index] = non_negative_integer(saved_hits[index], 0)
+		end
 		dirty = false
 	end
 

@@ -14,6 +14,19 @@ repeat pin hits and side-wall rebounds. See [current physics](docs/PHYSICS.md)
 for the algorithm, configuration and the change from the original DAG plan.
 
 Landing awards the configured basket score and persists it between launches.
+Debug builds expose a standalone ImGui **Cheats** button in the top-left corner.
+It opens controls for adding one or five balls, clearing local progress and
+restarting. The cheats UI is automatically absent when using a release engine.
+The launcher panel starts below the debug overlay and can be moved. The cheats
+window can also be moved and has a close button. The complete interface is
+scaled by a private view constant of 2.5.
+Press **~** (the backquote/tilde key) in a debug build to toggle the independent
+white `@render: draw_debug_text` overlay with persisted per-basket hits, total score and hit
+percentages. Statistics are not rendered inside ImGui. A private render/view
+constant enlarges the debug text by 2.5 without adding a gameplay config option.
+The overlay includes a semi-transparent dark full-screen GUI backdrop beneath
+the render text.
+The project uses the official Defold Dear ImGui extension 2.14.0.
 The latest physics changes
 have not been built, run or tested, as requested; visual review is required.
 

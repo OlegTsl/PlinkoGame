@@ -1,10 +1,11 @@
 [project]
 title = Plinko Game
 version = 0.1.0
+dependencies#0 = https://github.com/defold/extension-imgui/archive/refs/tags/2.14.0.zip
 
 [bootstrap]
 main_collection = /main/main.collectionc
-render = /builtins/render/default.renderc
+render = /render/game.renderc
 
 [display]
 width = 560
@@ -43,3 +44,6 @@ default_clear_color_alpha = 1.0
 [graphics]
 default_texture_min_filter = linear
 default_texture_mag_filter = linear
+
+[native_extension]
+app_manifest = /opengl.appmanifest

@@ -25,16 +25,16 @@ return {
 	},
 
 	motion = {
-		routes_per_bucket = 8,            -- bounded, continually replenished cache
-		work_units_per_frame = 160,       -- one unit = one local collision sweep
+		routes_per_bucket     = 8,        -- bounded, continually replenished cache
+		work_units_per_frame  = 160,      -- one unit = one local collision sweep
 		preparation_budget_ms = 2,
 		max_search_candidates = 16000,    -- error with the same target, never reroll
-		generator_seed = 15485863,
+		generator_seed        = 15485863,
 	},
 
 	art = {
 		ball = { image_size = 40, radius = 12, center_x = 20, center_y = 17 },
-		pin = { image_size = 44, radius = 10, center_x = 22, center_y = 21 },
+		pin  = { image_size = 44, radius = 10, center_x = 22, center_y = 21 },
 	},
 
 	runtime = {
@@ -44,7 +44,7 @@ return {
 
 	random = {
 		weight_epsilon = 1e-9,
-		outcome_seed = 104729,
-		visual_seed  = 130363,
+		outcome_seed   = 104729,
+		visual_seed    = 130363,
 	},
 }
