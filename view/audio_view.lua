@@ -1,15 +1,19 @@
 local M = {}
 
--- Several pin contacts may be emitted in one frame. Gate the shared effect so
--- a contact burst cannot exhaust Defold's finite pool of sound voices.
 local COLLISION_GATE_SECONDS = 0.04
+local MAX_COLLISION_SOUNDS = 5
 
 function M.create()
-	return {
+	local context = {
 		collide = msg.url("/audio#collide"),
 		collect = msg.url("/audio#collect"),
 		collision_cooldown = 0,
+		active_collision_sounds = 0,
 	}
+	context.on_collision_complete = function()
+		context.active_collision_sounds = math.max(0, context.active_collision_sounds - 1)
+	end
+	return context
 end
 
 function M.update(context, dt)
@@ -17,11 +21,13 @@ function M.update(context, dt)
 end
 
 function M.play_collision(context)
-	if context.collision_cooldown > 0 then
+	if context.collision_cooldown > 0
+		or context.active_collision_sounds >= MAX_COLLISION_SOUNDS then
 		return
 	end
 	context.collision_cooldown = COLLISION_GATE_SECONDS
-	sound.play(context.collide)
+	context.active_collision_sounds = context.active_collision_sounds + 1
+	sound.play(context.collide, nil, context.on_collision_complete)
 end
 
 function M.play_collect(context)

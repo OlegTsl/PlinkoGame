@@ -74,12 +74,15 @@ function M.create(config, physics_data, layout, manager)
 		elseif action == "spawn_many" then count = MULTI_SPAWN_COUNT
 		else return nil, "Unknown gameplay action" end
 		if context.queued_spawns > 0 then return nil, "Multi-spawn is already in progress" end
-		if manager:refresh_balls(wall_now).balls < count then return nil, "Not enough balls" end
+		local inventory, consume_error = manager:consume_balls(count, wall_now)
+		if not inventory then return nil, consume_error end
 		local events, message
 		if count == 1 then events, message = ball_system.spawn(context.balls)
 		else events, message = spawn_many(context, count) end
-		if not events then return nil, message end
-		manager:consume_balls(count, wall_now)
+		if not events then
+			manager:add_balls(count)
+			return nil, message
+		end
 		context.reserved = context.reserved + count
 		return settle(events)
 	end
