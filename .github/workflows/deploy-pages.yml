@@ -1,0 +1,70 @@
+name: Deploy debug web build to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build HTML5 debug bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Download Defold Bob
+        run: |
+          defold_sha="$(curl -fsSL --retry 3 https://d.defold.com/stable/info.json | jq -r '.sha1')"
+          test -n "$defold_sha"
+          test "$defold_sha" != "null"
+          curl -fL --retry 3 -o bob.jar "https://d.defold.com/archive/${defold_sha}/bob/bob.jar"
+
+      - name: Resolve dependencies and bundle debug HTML5 build
+        run: >-
+          java -jar bob.jar
+          --platform wasm-web
+          --architectures wasm-web
+          --variant debug
+          --archive
+          --bundle-output bundle/html5
+          resolve distclean build bundle
+
+      - name: Prepare Pages artifact
+        run: |
+          bundle_dir="$(dirname "$(find bundle/html5 -name index.html -type f -print -quit)")"
+          test -n "$bundle_dir"
+          mkdir site
+          cp -R "$bundle_dir"/. site/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: Publish to GitHub Pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v4
