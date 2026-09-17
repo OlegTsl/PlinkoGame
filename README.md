@@ -1,50 +1,95 @@
 # PlinkoGame
 
-Defold project for a configurable Plinko mini-game. Open `game.project` in the
-Defold editor and run the `main` collection. Press **Play** to drop one ball or
-**x5** to queue five balls. The selected basket is logged below the score and
-in the console. A request may wait while its physical trajectory is prepared.
-Play consumes one available ball and x5 consumes five. The inventory panel is
-always visible. The timer panel shows `+1 in hh:mm:ss` below maximum and `Ready`
-at full capacity; real-time regeneration continues between launches.
+## Описание
 
-Motion uses gravity and continuous circle/wall collisions, with a small
-background-generated route bank. Bounces follow contact normals, including
-repeat pin hits and side-wall rebounds. See [current physics](docs/PHYSICS.md)
-for the algorithm, configuration and the change from the original DAG plan.
-Pin contacts play `assets/sounds/collide.wav`; basket landing plays
-`assets/sounds/collect.wav` together with the score animation. Both assets are
-48 kHz stereo 16-bit PCM WAV files supported directly by Defold.
+**PlinkoGame** — мини-игра на Defold: игрок запускает шар в поле со штырями и
+получает очки за лунку, в которую он попал. Количество шаров и счёт сохраняются
+между запусками; шары восстанавливаются в реальном времени, в том числе когда
+игра закрыта. Откройте `game.project` в Defold и запустите коллекцию `main`.
 
-Landing awards the configured basket score and persists it between launches.
-Debug builds expose a standalone ImGui **Cheats** button in the top-left corner.
-It opens controls for adding one or five balls, clearing local progress and
-restarting. The cheats UI is automatically absent when using a release engine.
-The launcher panel starts below the debug overlay and can be moved. The cheats
-window can also be moved and has a close button. The complete interface is
-scaled by a private view constant of 2.5.
-Press **~** (the backquote/tilde key) in a debug build to toggle the independent
-white `@render: draw_debug_text` overlay with persisted per-basket hits, total score and hit
-percentages. Statistics are not rendered inside ImGui. A private render/view
-constant enlarges the debug text by 2.5 without adding a gameplay config option.
-The overlay includes a semi-transparent dark full-screen GUI backdrop beneath
-the render text.
-The project uses the official Defold Dear ImGui extension 2.14.0.
-The audit includes clean Lua syntax/lint checks. The full resource build is
-currently blocked by native ImGui diagnostics; desktop/mobile visual review
-remains outstanding. See the [audit report](docs/AUDIT.md) for exact scope and limits.
+Итоговая лунка выбирается в момент запуска по весам из конфигурации. Затем для
+неё берётся заранее подготовленное физическое падение, поэтому результат
+предсказуем для логики игры, а движение выглядит как обычные столкновения с
+штырями и стенками.
 
-Project documentation:
+## Правила
 
-- [Project structure](docs/PROJECT_STRUCTURE.md): directory boundaries,
-  dependency direction and rules for stable Core modules.
-- [Audit and refactor report](docs/AUDIT.md): findings, fixes, API checks and deferred work.
+- **Play** запускает один шар и расходует один доступный шар.
+- **x5** запускает очередь из пяти шаров и сразу расходует пять шаров.
+- При попадании в лунку к счёту добавляется её награда.
+- В HUD показаны текущий запас шаров и время до следующего восстановления.
+  При полном запасе вместо таймера отображается `Ready`.
 
-- [Project rules](AGENTS.md) and [requirements](TASK.md).
-- [Architecture and implementation handoff](docs/ARCHITECTURE.md): modules,
-  folder structure, state, persistence, field generation, scaling, and gameplay.
-- [Original motion specification](docs/PHYSICS_IMPLEMENTATION_PLAN.md): retained
-  design history; its port/DAG algorithm is superseded by the latest request.
-- [Current physical motion](docs/PHYSICS.md): implementation and manual review.
-- [LevelBuilder](docs/LEVEL_BUILDER.md): generated layout, GUI anchors and visual
-  templates.
+## Настройка
+
+Основной игровой конфиг — [`config/game_config.lua`](config/game_config.lua).
+
+| Параметр | Назначение |
+| --- | --- |
+| `balls.count` | Начальный и максимальный запас шаров. |
+| `balls.respawn_delay` | Время восстановления одного шара в секундах. |
+| `baskets.items` | Список лунок слева направо. Количество элементов = количество лунок. |
+| `baskets.items[n].weight` | Вероятность попадания в лунку. Сумма всех весов должна быть ровно `1.0`. |
+| `baskets.items[n].score` | Количество очков за попадание в лунку. |
+| `level.min_basket_count` / `level.max_basket_count` | Допустимый диапазон количества лунок. |
+
+При изменении числа лунок добавьте или удалите элементы `baskets.items`, не
+выходя за заданный диапазон, и проверьте сумму `weight`.
+
+## Редактор
+
+Поле собирается автоматически: в GUI Editor настраиваются только область поля,
+точка запуска, область штырей, полоса лунок и визуальные шаблоны. Ручная
+расстановка штырей и лунок не нужна.
+
+Для `N` лунок генератор создаёт `N - 1` рядов штырей: в рядах расположено
+`1, 2, …, N - 1` штырей. Всего получается `N × (N - 1) / 2` штырей. Полоса
+лунок делится на `N` равных частей, поэтому поле перестраивается вместе с
+количеством элементов `baskets.items`.
+
+## Физика
+
+Шар движется по параболе под действием постоянной гравитации. Столкновения со
+штырями, боковыми стенками и перегородками лунок рассчитываются непрерывно, без
+столкновений между шарами. При касании меняется скорость по нормали контакта;
+коэффициенты упругости не добавляют энергии. Маршруты подготавливаются в фоне,
+сохраняются отдельно для каждой лунки и воспроизводятся при запуске.
+
+Параметры находятся в [`data/physics_data.lua`](data/physics_data.lua). Все
+величины с суффиксом `_ratio` выражены через ширину лунки `d`.
+
+| Параметры | Назначение |
+| --- | --- |
+| `gravity_ratio` | Ускорение гравитации: `gravity_ratio × d`. |
+| `ball_radius_ratio`, `pin_radius_ratio` | Радиусы шара и штырей. |
+| `pin_restitution`, `wall_restitution`, `divider_restitution` | Упругость столкновений со штырями, внешними стенками и перегородками. |
+| `tangent_retention` | Доля касательной скорости, сохраняемая после удара. |
+| `spawn_spread_ratio` | Полуширина случайного смещения точки запуска. |
+| `launch_vx_ratio` | Максимальная начальная горизонтальная скорость: `±launch_vx_ratio × d/с`. |
+| `launch_vy_min_ratio`, `launch_vy_max_ratio` | Диапазон начальной вертикальной скорости. |
+| `contact_horizon` | Временной горизонт поиска следующего столкновения. |
+| `root_epsilon`, `root_iterations` | Точность и лимит итераций численного поиска контакта. |
+| `time_epsilon`, `velocity_epsilon_ratio` | Допуски для защиты от численного дребезга контактов. |
+| `max_flight_time` | Максимальная длительность одного подготовленного падения. |
+| `max_contacts` | Максимальное количество столкновений в одном маршруте. |
+| `minimum_pin_hits` | Минимальное число ударов о штыри для сохранения маршрута. |
+
+## Читы
+
+Панель читов доступна только в debug-сборке: она включается автоматически,
+когда Defold запущен с debug engine. Нажмите **Cheats** в левом верхнем углу,
+чтобы открыть панель. В ней доступны:
+
+- **Add 1 Ball** — добавить один шар;
+- **Add 5 Balls** — добавить пять шаров;
+- **Reset Progress** — очистить локальное сохранение и перезапустить игру.
+
+В release-сборке панель отсутствует.
+
+## Статистика
+
+В debug-сборке нажмите **~** (клавиша тильды/обратного апострофа), чтобы
+включить или скрыть статистику поверх поля. Она показывает общий счёт, число
+попаданий в каждую лунку и процент каждой лунки от общего числа попаданий.
+Счётчики попаданий сохраняются вместе с игровым прогрессом; проценты вычисляются
+при выводе.
