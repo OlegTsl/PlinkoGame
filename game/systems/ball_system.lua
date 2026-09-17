@@ -1,23 +1,17 @@
-local random = require("model.random")
-local trajectory = require("motion.trajectory")
-local collision_world = require("physics.collision_world")
-local route_bank = require("motion.route_bank")
+local random = require("core.math.random")
+local trajectory = require("core.motion.trajectory")
+local collision_world = require("core.physics.collision_world")
+local route_bank = require("game.motion.route_bank")
 
 local M = {}
+local OUTCOME_SEED = 104729
+local VISUAL_SEED = 130363
 
 local function push(events, event)
 	events[#events + 1] = event
 end
 
-function M.create(config, physics_data, layout)
-	local weight_sum = 0
-	for _, item in ipairs(config.baskets.items) do
-		if item.weight < 0 then return nil, "Negative basket weight" end
-		weight_sum = weight_sum + item.weight
-	end
-	if math.abs(weight_sum - 1) > config.random.weight_epsilon then
-		return nil, "Basket weights must sum to 1"
-	end
+function M.create(config, physics_data, motion_data, runtime_data, layout)
 	local radius = physics_data.ball_radius_ratio * layout.basket_width
 	if layout.basket_width <= 2 * (radius + layout.divider_half_width) then
 		return nil, "Ball diameter and basket dividers leave no landing corridor"
@@ -31,14 +25,16 @@ function M.create(config, physics_data, layout)
 	local context = {
 		config = config,
 		physics = physics_data,
+		motion = motion_data,
+		runtime = runtime_data,
 		layout = layout,
 		world = collision_world.create(layout, physics_data),
-		bank = route_bank.create(config, layout),
+		bank = route_bank.create(motion_data, layout),
 		active = {},
 		events = {},
 		next_ball_id = 1,
-		outcome_seed = config.random.outcome_seed,
-		visual_seed = config.random.visual_seed,
+		outcome_seed = OUTCOME_SEED,
+		visual_seed = VISUAL_SEED,
 	}
 	return context
 end
@@ -71,12 +67,10 @@ local function activate(context, route, next_visual_seed)
 	}
 end
 
--- A request fixes its outcome immediately. A missing physical route leaves
--- that same request pending while bounded background work continues.
 function M.spawn(context)
 	if context.error then return nil, context.error end
 	if context.pending then return nil, "Preparing bucket " .. context.pending.target end
-	if #context.active >= context.config.runtime.max_active_balls then
+	if #context.active >= context.runtime.max_active_balls then
 		return nil, "active ball limit reached"
 	end
 	local value, seed = random.next(context.outcome_seed)
@@ -177,7 +171,7 @@ function M.update(context, dt, deadline_reached)
 	local events = context.events
 	for index = #events, 1, -1 do events[index] = nil end
 	if not context.error then
-		route_bank.update(context.bank, context.world, context.config, context.physics, deadline_reached)
+		route_bank.update(context.bank, context.world, context.motion, context.physics, deadline_reached)
 	end
 	if context.pending and not context.error then
 		local target = context.pending.target
@@ -186,12 +180,12 @@ function M.update(context, dt, deadline_reached)
 		if route then
 			local spawned = activate(context, route, seed)
 			push(events, spawned[1])
-		elseif completed_attempts - context.pending.started_attempt >= context.config.motion.max_search_candidates then
+		elseif completed_attempts - context.pending.started_attempt >= context.motion.max_search_candidates then
 			context.error = "No physical route to bucket " .. target .. "; adjust launch/field settings"
 			push(events, { type = "motion_error", message = context.error })
 		end
 	end
-	local step = math.min(math.max(dt, 0), context.config.runtime.max_visual_step)
+	local step = math.min(math.max(dt, 0), context.runtime.max_visual_step)
 	local active_count, kept = #context.active, 0
 	for index = 1, active_count do
 		local ball = context.active[index]

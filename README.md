@@ -36,6 +36,8 @@ remains outstanding. See the [audit report](docs/AUDIT.md) for exact scope and l
 
 Project documentation:
 
+- [Project structure](docs/PROJECT_STRUCTURE.md): directory boundaries,
+  dependency direction and rules for stable Core modules.
 - [Audit and refactor report](docs/AUDIT.md): findings, fixes, API checks and deferred work.
 
 - [Project rules](AGENTS.md) and [requirements](TASK.md).

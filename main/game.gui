@@ -7,6 +7,12 @@ textures {
   name: "game"
   texture: "/assets/game.atlas"
 }
+layers {
+  name: "balls"
+}
+layers {
+  name: "baskets"
+}
 nodes {
   position {
     x: 280.0
@@ -49,15 +55,31 @@ nodes {
     y: 365.0
   }
   size {
+    x: 24.0
+    y: 24.0
+  }
+  type: TYPE_BOX
+  id: "spawn_anchor"
+  parent: "level_root"
+  inherit_alpha: true
+  alpha: 0.0
+  enabled: false
+}
+nodes {
+  position {
+    y: -3.0
+  }
+  size {
     x: 40.0
     y: 40.0
   }
   type: TYPE_BOX
   texture: "game/ball_1"
-  id: "spawn_anchor"
-  parent: "level_root"
-  inherit_alpha: true
-  alpha: 0.65
+  id: "ball_sprite_template"
+  parent: "spawn_anchor"
+  layer: "balls"
+  inherit_alpha: false
+  enabled: false
 }
 nodes {
   position {
@@ -153,6 +175,7 @@ nodes {
   type: TYPE_BOX
   id: "basket_fill_template"
   parent: "basket_template"
+  layer: "baskets"
   inherit_alpha: true
   alpha: 0.5
 }
@@ -167,6 +190,7 @@ nodes {
   type: TYPE_BOX
   id: "basket_left_side_template"
   parent: "basket_template"
+  layer: "baskets"
   inherit_alpha: true
 }
 nodes {
@@ -180,6 +204,7 @@ nodes {
   type: TYPE_BOX
   id: "basket_right_side_template"
   parent: "basket_template"
+  layer: "baskets"
   inherit_alpha: true
 }
 nodes {
@@ -195,6 +220,7 @@ nodes {
   font: "default"
   id: "basket_label_template"
   parent: "basket_template"
+  layer: "baskets"
   inherit_alpha: true
 }
 nodes {
@@ -210,6 +236,7 @@ nodes {
   font: "default"
   id: "basket_score_pop_template"
   parent: "basket_template"
+  layer: "baskets"
   inherit_alpha: true
   enabled: false
 }

@@ -1,12 +1,12 @@
-local random = require("model.random")
-local simulator = require("physics.simulator")
+local random = require("core.math.random")
+local simulator = require("core.physics.simulator")
 local M = {}
 
-function M.create(config, layout)
+function M.create(motion_data, layout)
 	local bank = {
-		seed = config.motion.generator_seed, candidate = nil, attempts = 0,
+		seed = motion_data.generator_seed, candidate = nil, attempts = 0,
 		buckets = {}, count = 0,
-		capacity = #layout.baskets * config.motion.routes_per_bucket,
+		capacity = #layout.baskets * motion_data.routes_per_bucket,
 	}
 	for i = 1, #layout.baskets do bank.buckets[i] = {} end
 	return bank
@@ -26,9 +26,9 @@ local function launch(bank, world, physics_data)
 	return simulator.create(x, layout.spawn.y, vx, vy)
 end
 
-function M.update(bank, world, config, physics_data, deadline_reached)
+function M.update(bank, world, motion_data, physics_data, deadline_reached)
 	if bank.count >= bank.capacity then return end
-	for _ = 1, config.motion.work_units_per_frame do
+	for _ = 1, motion_data.work_units_per_frame do
 		if deadline_reached and deadline_reached() then return end
 		if not bank.candidate then bank.candidate = launch(bank, world, physics_data) end
 		local status, route = simulator.advance(bank.candidate, world)
@@ -36,7 +36,7 @@ function M.update(bank, world, config, physics_data, deadline_reached)
 			bank.candidate = nil
 			if route then
 				local bucket = bank.buckets[route.target_bucket]
-				if #bucket < config.motion.routes_per_bucket then
+				if #bucket < motion_data.routes_per_bucket then
 					bucket[#bucket + 1] = route
 					bank.count = bank.count + 1
 				end

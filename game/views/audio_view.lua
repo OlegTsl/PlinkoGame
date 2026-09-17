@@ -1,7 +1,7 @@
 local M = {}
 
 local COLLISION_GATE_SECONDS = 0.04
-local MAX_COLLISION_SOUNDS = 5
+local MAX_COLLISION_SOUNDS   = 5
 
 function M.create()
 	local context = {

@@ -1,10 +1,10 @@
-local level_layout = require("model.level_layout")
+local level_layout = require("game.level.level_layout")
 
 local M = {}
 local SCORE_POP_DURATION  = 0.35
 local SCORE_POP_SCALE     = 2.4
 local GUI_NODE_CAPACITY   = 512
-local AUTHORED_NODE_COUNT = 24
+local AUTHORED_NODE_COUNT = 25
 local NODES_PER_BASKET    = 6
 
 local DEFAULT_NODE_IDS = {
@@ -74,9 +74,9 @@ local function delete_dynamic_nodes(context)
 	context.layout        = nil
 end
 
-local function build_parameters(context, specification)
+local function build_parameters(context, specification, physics_data)
 	local field_size = gui.get_size(context.nodes.level_root)
-	local pin_size   = gui.get_size(context.nodes.pin_template)
+	local basket_area = node_rect_in_field(context.nodes.basket_area_anchor, field_size)
 	return {
 		basket_count = specification.basket_count,
 		basket_items = specification.basket_items,
@@ -84,9 +84,9 @@ local function build_parameters(context, specification)
 		field        = { width = field_size.x, height = field_size.y },
 		spawn        = point_in_field(context.nodes.spawn_anchor, field_size),
 		pin_area     = node_rect_in_field(context.nodes.pin_area_anchor, field_size),
-		basket_area  = node_rect_in_field(context.nodes.basket_area_anchor, field_size),
-		pin_radius   = math.min(pin_size.x, pin_size.y)
-			* specification.pin_art.radius / specification.pin_art.image_size,
+		basket_area  = basket_area,
+		pin_radius   = physics_data.pin_radius_ratio
+			* ((basket_area.right - basket_area.left) / specification.basket_count),
 	}
 end
 
@@ -97,12 +97,6 @@ local function create_pin_nodes(context, layout)
 		context.dynamic_roots[#context.dynamic_roots + 1] = node
 		gui.set_parent(node, context.nodes.level_root)
 		gui.set_position(node, to_gui_position(layout, pin.x, pin.y))
-		local art = context.pin_art
-		local size = gui.get_size(node)
-		local position = gui.get_position(node)
-		position.x = position.x + (0.5 - art.center_x / art.image_size) * size.x
-		position.y = position.y + (art.center_y / art.image_size - 0.5) * size.y
-		gui.set_position(node, position)
 		gui.set_enabled(node, true)
 	end
 end
@@ -195,12 +189,12 @@ function M.play_score_pop(context, basket_id)
 	)
 end
 
-function M.build(context, specification, max_balls, max_waves)
+function M.build(context, specification, physics_data, max_balls, max_waves)
 	assert(context, "LevelBuilder: context is required")
 	assert(type(specification) == "table", "LevelBuilder: specification is required")
 	delete_dynamic_nodes(context)
 
-	local layout, error_message = level_layout.generate(build_parameters(context, specification))
+	local layout, error_message = level_layout.generate(build_parameters(context, specification, physics_data))
 	if not layout then
 		return nil, error_message
 	end
@@ -209,7 +203,6 @@ function M.build(context, specification, max_balls, max_waves)
 	if required_nodes > GUI_NODE_CAPACITY then
 		return nil, "LevelBuilder: GUI node capacity exceeded (" .. required_nodes .. ")"
 	end
-	context.pin_art = specification.pin_art
 	local side = gui.get_size(context.nodes.basket_left_side_template)
 	-- Internal boundaries now contain one strip instead of two overlapping strips.
 	layout.divider_half_width = side.x * 0.5

@@ -1,19 +1,21 @@
-local game_config     = require("config.game_config")
-local build_config    = require("config.build_config")
-local physics_data    = require("config.physics_data")
-local ui_data         = require("config.ui_data")
-local game_controller = require("controller.game_controller")
-local game_manager    = require("manager.game_manager")
-local game_state      = require("model.game_state")
-local ball_view       = require("view.ball_view")
-local audio_view      = require("view.audio_view")
-local debug_statistics_view = require("view.debug_statistics_view")
-local hud_view        = require("view.hud_view")
-local level_builder   = require("view.level_builder")
-local viewport        = require("view.viewport")
-local cheats_view     = require("view.cheats_view")
-local storage         = require("services.storage")
-local config_validator = require("config.config_validator")
+local game_config      = require("config.game_config")
+local build_config     = require("config.build_config")
+local physics_data     = require("data.physics_data")
+local motion_data      = require("data.motion_data")
+local runtime_data     = require("data.runtime_data")
+local ui_data          = require("data.ui_data")
+local game_controller  = require("game.application.game_controller")
+local game_manager     = require("game.application.game_manager")
+local game_state       = require("game.state.game_state")
+local ball_view        = require("game.views.ball_view")
+local audio_view       = require("game.views.audio_view")
+local stat_view        = require("game.views.stat_view")
+local hud_view         = require("game.views.hud_view")
+local level_builder    = require("game.builders.level_builder")
+local viewport         = require("core.render.viewport")
+local cheats_view      = require("game.views.cheats_view")
+local storage          = require("game.infrastructure.storage")
+local config_validator = require("game.validation.config_validator")
 
 local DESIGN_WIDTH  = 560
 local DESIGN_HEIGHT = 780
@@ -50,7 +52,13 @@ local function apply_events(self, events)
 end
 
 function init(self)
-	local valid, validation_error = config_validator.validate(game_config, physics_data, ui_data)
+	local valid, validation_error = config_validator.validate(
+		game_config,
+		physics_data,
+		motion_data,
+		runtime_data,
+		ui_data
+	)
 	if not valid then
 		show_error(validation_error)
 		return
@@ -61,7 +69,7 @@ function init(self)
 	self.deadline_reached = function() return os.clock() >= self.preparation_deadline end
 	self.paused = false
 	self.show_debug_statistics = false
-	self.debug_statistics = debug_statistics_view.create()
+	self.debug_statistics = stat_view.create()
 	self.audio = audio_view.create()
 	self.statistics_output = { hits = {}, percentages = {} }
 	self.cheats = cheats_view.create(build_config.DEV_CHEATS)
@@ -75,20 +83,26 @@ function init(self)
 		basket_count = #game_config.baskets.items,
 		basket_items = game_config.baskets.items,
 		limits = limits,
-		pin_art = game_config.art.pin,
-	}, game_config.runtime.max_active_balls, ui_data.wave.pool_size)
+	}, physics_data, runtime_data.max_active_balls, ui_data.wave.pool_size)
 	if not layout then
 		show_error(error_message)
 		return
 	end
 
 	self.layout = layout
-	self.controller, error_message = game_controller.create(game_config, physics_data, layout, self.manager)
+	self.controller, error_message = game_controller.create(
+		game_config,
+		physics_data,
+		motion_data,
+		runtime_data,
+		layout,
+		self.manager
+	)
 	if not self.controller then
 		show_error(error_message)
 		return
 	end
-	self.ball_view = ball_view.create(layout, game_config.art, physics_data, ui_data)
+	self.ball_view = ball_view.create(layout, physics_data, ui_data)
 	local inventory = self.manager:refresh_balls(wall_now)
 	self.hud = hud_view.create(
 		self.manager:get_score(),
@@ -142,9 +156,9 @@ function update(self, dt)
 		end
 	end
 	if self.controller and not self.paused then
-		local step = math.min(math.max(dt, 0), game_config.runtime.max_visual_step)
+		local step = math.min(math.max(dt, 0), runtime_data.max_visual_step)
 		ball_view.update(self.ball_view, step)
-		self.preparation_deadline = os.clock() + game_config.motion.preparation_budget_ms / 1000
+		self.preparation_deadline = os.clock() + motion_data.preparation_budget_ms / 1000
 		apply_events(self, self.controller:update(step, self.deadline_reached))
 	end
 	if self.manager then
@@ -165,7 +179,7 @@ function update(self, dt)
 			)
 		end
 		if self.show_debug_statistics then
-			debug_statistics_view.draw(self.debug_statistics, self.manager:get_statistics(self.statistics_output))
+			stat_view.draw(self.debug_statistics, self.manager:get_statistics(self.statistics_output))
 		end
 	end
 	if self.hud then
@@ -184,7 +198,7 @@ function on_input(self, action_id, action)
 		and action_id == TOGGLE_DEBUG_STATISTICS
 		and action.pressed then
 		self.show_debug_statistics = not self.show_debug_statistics
-		debug_statistics_view.set_visible(
+		stat_view.set_visible(
 			self.debug_statistics,
 			self.show_debug_statistics
 		)
@@ -225,7 +239,7 @@ function final(self)
 		if not saved then print("Save failed on shutdown: " .. message) end
 	end
 	if self.debug_statistics then
-		debug_statistics_view.destroy(self.debug_statistics)
+		stat_view.destroy(self.debug_statistics)
 	end
 	self.layout        = nil
 	self.controller    = nil

@@ -1,6 +1,5 @@
 local M = {}
 
--- Optional caller-owned output avoids allocating on each inventory refresh.
 function M.calculate(balls, regen_timestamp, maximum, delay, wall_now, output)
 	local result = output or {}
 	local next_balls = balls

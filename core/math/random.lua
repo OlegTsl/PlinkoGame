@@ -1,9 +1,9 @@
 local M = {}
 
-local MODULUS = 2147483647
+local MODULUS    = 2147483647
 local MULTIPLIER = 16807
-local QUOTIENT = 127773
-local REMAINDER = 2836
+local QUOTIENT   = 127773
+local REMAINDER  = 2836
 
 function M.next(seed)
 	local high = math.floor(seed / QUOTIENT)

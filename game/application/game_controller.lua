@@ -1,4 +1,4 @@
-local ball_system = require("model.ball_system")
+local ball_system = require("game.systems.ball_system")
 
 local M = {}
 local MULTI_SPAWN_COUNT = 5
@@ -46,8 +46,14 @@ local function update(context, dt, deadline_reached)
 end
 
 -- The GUI receives operations and events; motion caches and queue state stay private.
-function M.create(config, physics_data, layout, manager)
-	local balls, error_message = ball_system.create(config, physics_data, layout)
+function M.create(config, physics_data, motion_data, runtime_data, layout, manager)
+	local balls, error_message = ball_system.create(
+		config,
+		physics_data,
+		motion_data,
+		runtime_data,
+		layout
+	)
 	if not balls then return nil, error_message end
 	local context = { balls = balls, queued_spawns = 0, reserved = 0 }
 	local controller = {}

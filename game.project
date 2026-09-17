@@ -5,7 +5,7 @@ dependencies#0 = https://github.com/defold/extension-imgui/archive/refs/tags/2.1
 
 [bootstrap]
 main_collection = /main/main.collectionc
-render = /render/game.renderc
+render = /core/render/default.renderc
 
 [display]
 width = 560
@@ -46,4 +46,4 @@ default_texture_min_filter = linear
 default_texture_mag_filter = linear
 
 [native_extension]
-app_manifest = /opengl.appmanifest
+app_manifest = /core/render/opengl.appmanifest

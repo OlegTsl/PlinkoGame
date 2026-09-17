@@ -103,19 +103,19 @@ function M.create(basket_count)
 
 	function state:serialize()
 		return {
-			balls = balls,
-			score = score,
+			balls           = balls,
+			score           = score,
 			regen_timestamp = regen_timestamp,
-			basket_hits = state:get_basket_hits(),
+			basket_hits     = state:get_basket_hits(),
 		}
 	end
 
 	function state:deserialize(snapshot)
 		assert(type(snapshot) == "table", "snapshot must be a table")
-		-- Keep the caller's defaults for damaged or missing fields. A fractional
-		-- timestamp is valid when the regeneration interval is fractional.
+
 		balls = non_negative_integer(snapshot.balls, balls)
 		score = non_negative_integer(snapshot.score, score)
+		
 		local timestamp = snapshot.regen_timestamp
 		if type(timestamp) == "number" and timestamp >= 0 and timestamp < math.huge then
 			regen_timestamp = timestamp

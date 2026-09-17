@@ -1,4 +1,4 @@
-local roots = require("physics.roots")
+local roots = require("core.math.polynomial_roots")
 local M = {}
 
 function M.create(layout, physics_data)

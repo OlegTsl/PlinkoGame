@@ -1,4 +1,4 @@
-local collision_world = require("physics.collision_world")
+local collision_world = require("core.physics.collision_world")
 local M = {}
 
 function M.create(x, y, vx, vy)

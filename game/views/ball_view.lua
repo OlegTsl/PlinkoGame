@@ -7,18 +7,18 @@ local function to_gui_position(context, point)
 	return position
 end
 
-function M.create(layout, art_data, physics_data, ui_data)
+function M.create(layout, physics_data, ui_data)
 	local pins = {}
 	for index = 1, #layout.pins do
 		pins[layout.pins[index].id] = layout.pins[index]
 	end
 	local context = {
 		layout = layout,
-		art = art_data,
 		physics = physics_data,
 		ui = ui_data,
 		level_root = gui.get_node("level_root"),
 		ball_template = gui.get_node("spawn_anchor"),
+		ball_sprite_template = gui.get_node("ball_sprite_template"),
 		wave_template = gui.get_node("wave_template"),
 		balls = {},
 		waves = {},
@@ -36,10 +36,10 @@ function M.create(layout, art_data, physics_data, ui_data)
 	return context
 end
 
-local function acquire(context, template, pool)
-	local node = table.remove(pool)
+local function acquire_wave(context)
+	local node = table.remove(context.free_waves)
 	if not node then
-		node = gui.clone(template)
+		node = gui.clone(context.wave_template)
 		gui.set_parent(node, context.level_root)
 		context.allocated[#context.allocated + 1] = node
 	end
@@ -47,41 +47,53 @@ local function acquire(context, template, pool)
 	return node
 end
 
-local function ball_position(context, position, scale)
-	local art = context.art.ball
-	local size = context.physics.ball_radius_ratio * context.layout.basket_width
-		* art.image_size / art.radius * scale
+local function acquire_ball(context)
+	local ball = table.remove(context.free_balls)
+	if not ball then
+		local clones = gui.clone_tree(context.ball_template)
+		local node = clones[gui.get_id(context.ball_template)]
+		local sprite = clones[gui.get_id(context.ball_sprite_template)]
+		if not node or not sprite then error("BallView: ball template tree is incomplete") end
+		gui.set_parent(node, context.level_root)
+		ball = { node = node, sprite = sprite }
+		context.allocated[#context.allocated + 1] = node
+	end
+	gui.set_enabled(ball.node, true)
+	gui.set_enabled(ball.sprite, true)
+	return ball
+end
+
+local function ball_position(context, position)
 	local point = to_gui_position(context, position)
-	point.x = point.x + (0.5 - art.center_x / art.image_size) * size
-	point.y = point.y + (art.center_y / art.image_size - 0.5) * size
 	return point
 end
 
 local function spawn_ball(context, event)
-	local node = acquire(context, context.ball_template, context.free_balls)
-	local art = context.art.ball
-	local size = context.physics.ball_radius_ratio * context.layout.basket_width
-		* art.image_size / art.radius
-	gui.set_size(node, vmath.vector3(size, size, 0))
-	gui.set_position(node, ball_position(context, event.position, 1))
-	gui.set_scale(node, vmath.vector3(1, 1, 1))
-	gui.set_color(node, vmath.vector4(1, 1, 1, 1))
-	context.balls[event.ball_id] = { node = node, scale = 1, alpha = 1 }
+	local ball = acquire_ball(context)
+	local diameter = context.physics.ball_radius_ratio * context.layout.basket_width * 2
+	local template_size = gui.get_size(context.ball_template)
+	local base_scale = diameter / math.min(template_size.x, template_size.y)
+	gui.set_position(ball.node, ball_position(context, event.position))
+	gui.set_scale(ball.node, vmath.vector3(base_scale, base_scale, 1))
+	gui.set_color(ball.sprite, vmath.vector4(1, 1, 1, 1))
+	ball.base_scale, ball.scale, ball.alpha = base_scale, 1, 1
+	context.balls[event.ball_id] = ball
 end
 
 local function apply_pose(context, event)
 	local ball = context.balls[event.ball_id]
 	if not ball then return end
-	gui.set_position(ball.node, ball_position(context, event.position, event.scale))
+	gui.set_position(ball.node, ball_position(context, event.position))
 	if ball.scale ~= event.scale then
 		ball.scale = event.scale
-		context.scale.x, context.scale.y = event.scale, event.scale
+		local scale = ball.base_scale * event.scale
+		context.scale.x, context.scale.y = scale, scale
 		gui.set_scale(ball.node, context.scale)
 	end
 	if ball.alpha ~= event.alpha then
 		ball.alpha = event.alpha
 		context.color.w = event.alpha
-		gui.set_color(ball.node, context.color)
+		gui.set_color(ball.sprite, context.color)
 	end
 end
 
@@ -105,7 +117,7 @@ local function spawn_wave(context, event)
 		if context.wave_count >= context.ui.wave.pool_size then return end
 		context.wave_count = context.wave_count + 1
 	end
-	local node = acquire(context, context.wave_template, context.free_waves)
+	local node = acquire_wave(context)
 	gui.set_position(node, to_gui_position(context, pin))
 	local diameter = pin.radius * 2
 	gui.set_size(node, vmath.vector3(diameter, diameter, 0))
@@ -129,7 +141,7 @@ function M.apply_events(context, events)
 			if ball then
 				local node = ball.node
 				gui.set_enabled(node, false)
-				context.free_balls[#context.free_balls + 1] = node
+				context.free_balls[#context.free_balls + 1] = ball
 				context.balls[event.ball_id] = nil
 			end
 		end

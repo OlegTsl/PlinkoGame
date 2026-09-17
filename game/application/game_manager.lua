@@ -1,10 +1,9 @@
-local regeneration = require("model.regeneration")
+local regeneration = require("game.systems.regen_system")
 
 local M = {}
 
 local SAVE_RETRY_SECONDS = 1
 
--- Owns gameplay state operations; persistence is supplied by the composition root.
 function M.create(config, state, wall_now, storage)
 	local manager = {}
 	local last_failed_save
@@ -63,7 +62,6 @@ function M.create(config, state, wall_now, storage)
 		}
 	end
 
-	-- Copy the cached projection into caller-owned output, never expose the cache.
 	function manager:get_statistics(output)
 		if not statistics then build_statistics() end
 		local result = output or { hits = {}, percentages = {} }
@@ -76,7 +74,6 @@ function M.create(config, state, wall_now, storage)
 	end
 
 	function manager:reset_progress(current_wall_time)
-		-- Do not change live progress or request a reboot until deletion succeeds.
 		local erased, result = storage:save({})
 		if not erased then
 			return nil, result

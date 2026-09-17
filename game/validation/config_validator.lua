@@ -1,9 +1,7 @@
-local M = {}
+local tools = require("utils.utils")
 
-local function group(value, name)
-	assert(type(value) == "table", name .. " must be a table")
-	return value
-end
+local M = {}
+local WEIGHT_EPSILON = 1e-9
 
 local function number(value, name, minimum, maximum, integer)
 	assert(type(value) == "number" and value == value and value > -math.huge
@@ -18,52 +16,49 @@ local function positive(value, name)
 	assert(value > 0, name .. " must be positive")
 end
 
-local function validate(config, physics, ui)
-	group(config, "config")
-	local balls = group(config.balls, "balls")
+local function validate(config, physics, motion, runtime, ui)
+	tools.is_type(config, tools.T.Table, "config")
+
+	local balls = tools.is_type(config.balls, tools.T.Table, "balls")
 	number(balls.count, "balls.count", 1, math.huge, true)
 	positive(balls.respawn_delay, "balls.respawn_delay")
-	local level = group(config.level, "level")
+
+	local level = tools.is_type(config.level, tools.T.Table, "level")
 	number(level.min_basket_count, "level.min_basket_count", 3, math.huge, true)
 	number(level.max_basket_count, "level.max_basket_count", level.min_basket_count, math.huge, true)
-	local items = group(group(config.baskets, "baskets").items, "baskets.items")
+
+	local baskets = tools.is_type(config.baskets, tools.T.Table, "baskets")
+	local items = tools.is_type(baskets.items, tools.T.Table, "baskets.items")
 	local count = #items
+
 	number(count, "basket count", level.min_basket_count, level.max_basket_count, true)
 	for key in pairs(items) do
 		number(key, "basket index", 1, count, true)
 	end
+
 	local sum = 0
 	for index = 1, count do
-		local item = group(items[index], "basket " .. index)
+		local item = tools.is_type(items[index], tools.T.Table, "basket " .. index)
 		sum = sum + number(item.weight, "basket weight", 0, 1)
 		number(item.score, "basket score", 0, math.huge, true)
 	end
-	local random = group(config.random, "random")
-	positive(random.weight_epsilon, "random.weight_epsilon")
-	assert(random.weight_epsilon < 1 and math.abs(sum - 1) <= random.weight_epsilon,
+
+	assert(math.abs(sum - 1) <= WEIGHT_EPSILON,
 		"Basket weights must sum to 1")
-	-- Park–Miller's state is restricted to 1 .. modulus - 1.
-	number(random.outcome_seed, "random.outcome_seed", 1, 2147483646, true)
-	number(random.visual_seed, "random.visual_seed", 1, 2147483646, true)
-	local motion = group(config.motion, "motion")
+
+	tools.is_type(motion, tools.T.Table, "motion")
 	number(motion.generator_seed, "motion.generator_seed", 1, 2147483646, true)
 	for _, key in ipairs({ "routes_per_bucket", "work_units_per_frame", "max_search_candidates" }) do
 		number(motion[key], "motion." .. key, 1, math.huge, true)
 	end
 	positive(motion.preparation_budget_ms, "motion.preparation_budget_ms")
-	local runtime = group(config.runtime, "runtime")
+
+	tools.is_type(runtime, tools.T.Table, "runtime")
 	number(runtime.max_active_balls, "runtime.max_active_balls", 1, math.huge, true)
 	positive(runtime.max_visual_step, "runtime.max_visual_step")
-	local art = group(config.art, "art")
-	for _, key in ipairs({ "ball", "pin" }) do
-		local image = group(art[key], "art." .. key)
-		positive(image.image_size, "art image_size")
-		positive(image.radius, "art radius")
-		number(image.center_x, "art center_x", 0, image.image_size)
-		number(image.center_y, "art center_y", 0, image.image_size)
-	end
-	group(physics, "physics")
-	for _, key in ipairs({ "gravity_ratio", "ball_radius_ratio", "contact_horizon",
+
+	tools.is_type(physics, tools.T.Table, "physics")
+	for _, key in ipairs({ "gravity_ratio", "ball_radius_ratio", "pin_radius_ratio", "contact_horizon",
 		"root_epsilon", "time_epsilon", "velocity_epsilon_ratio", "max_flight_time" }) do
 		positive(physics[key], "physics." .. key)
 	end
@@ -80,7 +75,8 @@ local function validate(config, physics, ui)
 	number(physics.root_iterations, "physics.root_iterations", 1, math.huge, true)
 	number(physics.max_contacts, "physics.max_contacts", 1, math.huge, true)
 	number(physics.minimum_pin_hits, "physics.minimum_pin_hits", 0, physics.max_contacts, true)
-	local wave = group(group(ui, "ui").wave, "ui.wave")
+	local ui_config = tools.is_type(ui, tools.T.Table, "ui")
+	local wave = tools.is_type(ui_config.wave, tools.T.Table, "ui.wave")
 	positive(wave.duration, "wave.duration")
 	number(wave.start_scale, "wave.start_scale", 0, math.huge)
 	number(wave.end_scale, "wave.end_scale", 0, math.huge)
@@ -88,9 +84,8 @@ local function validate(config, physics, ui)
 	number(wave.pool_size, "wave.pool_size", 0, math.huge, true)
 end
 
--- Validate once, before persistence or GUI construction can dereference data.
-function M.validate(config, physics, ui)
-	local ok, message = pcall(validate, config, physics, ui)
+function M.validate(config, physics, motion, runtime, ui)
+	local ok, message = pcall(validate, config, physics, motion, runtime, ui)
 	if not ok then return nil, "Config: " .. tostring(message) end
 	return true
 end
